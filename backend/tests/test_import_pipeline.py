@@ -6,7 +6,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.db import engine, init_db
 from app.models import Activity, ImportJob
-from app.importer.parsers import GpxTrackPointsParser, TcxTrackPointsParser, FitTrackPointsParser, ParsedTrackPoint
+from app.importer.parsers import GpxTrackPointsParser, TcxTrackPointsParser, FitTrackPointsParser, ParsedTrackPoint, suffix_key
 from app.importer.strava_csv import read_activities_csv
 from app.importer.derive import clean_points, computed_distance_m, generate_splits, generate_best_efforts, simplify_route
 from app.importer.job import process_import_job
@@ -41,6 +41,12 @@ def test_csv_parses_runs_and_skips_non_runs(tmp_path, caplog):
     assert len(rows) == 2
     assert rows[0].sport_type == "Run" and rows[0].filename == "activities/a.gpx"
     assert rows[1].sport_type == "Weight Training"
+
+
+def test_suffix_key_supports_compressed_variants():
+    assert suffix_key(Path("a.gpx.gz")).removesuffix(".gz").lstrip(".") == "gpx"
+    assert suffix_key(Path("a.fit.gz")).removesuffix(".gz").lstrip(".") == "fit"
+    assert suffix_key(Path("a.tcx.gz")).removesuffix(".gz").lstrip(".") == "tcx"
 
 
 def test_gpx_and_tcx_parsing(tmp_path):
@@ -93,12 +99,12 @@ def build_zip(tmp_path: Path, bad_second=False):
     return z
 
 
-def run_zip(z: Path, tmp_path: Path):
+def run_zip(z: Path, tmp_path: Path, force_all=False, force_ext=None):
     tmp = tmp_path / "jobtmp"; tmp.mkdir(exist_ok=True)
     upload = tmp / "upload.zip"; shutil.copy(z, upload)
     with Session(engine) as s:
         job = ImportJob(); s.add(job); s.commit(); s.refresh(job); jid = job.id
-    process_import_job(jid, upload, tmp)
+    process_import_job(jid, upload, tmp, force_all, set(force_ext or []))
     with Session(engine) as s:
         return s.get(ImportJob, jid)
 
@@ -115,3 +121,13 @@ def test_dedupe_and_failure_policy(tmp_path):
     bad = build_zip(tmp_path / "bad", bad_second=True)
     job3 = run_zip(bad, tmp_path / "bad")
     assert job3.new_count == 1 and job3.failed_count == 1 and job3.status == "completed"
+
+
+def test_force_reprocess_all_and_extensions(tmp_path):
+    z = build_zip(tmp_path)
+    first = run_zip(z, tmp_path)
+    assert first.new_count == 2
+    forced_all = run_zip(z, tmp_path, force_all=True)
+    assert forced_all.reprocessed_count == 2 and forced_all.skipped_count == 0
+    forced_gpx = run_zip(z, tmp_path, force_ext=["gpx"])
+    assert forced_gpx.reprocessed_count == 2 and forced_gpx.skipped_count == 0

@@ -33,8 +33,11 @@ export const api = {
   splits: (id: number) => request<Split[]>(`/activities/${id}/splits`),
   bestEfforts: (id: number) => request<BestEffort[]>(`/activities/${id}/best-efforts`),
   streams: (id: number, types = "pace,heart_rate,cadence,elevation") => request<StreamResponse>(`/activities/${id}/streams?types=${types}`),
-  uploadZip: async (file: File) => {
-    const form = new FormData(); form.append("file", file);
+  uploadZip: async ({ file, forceReprocessAll = false, forceReprocessExtensions = [] }: { file: File; forceReprocessAll?: boolean; forceReprocessExtensions?: string[] }) => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("force_reprocess_all", String(forceReprocessAll));
+    form.append("force_reprocess_extensions", forceReprocessExtensions.join(","));
     return request<{id: number; status: string}>("/imports/strava-zip", { method: "POST", body: form });
   },
   importJob: (id: number) => request<ImportJob>(`/imports/${id}`),

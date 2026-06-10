@@ -8,7 +8,7 @@ from ..config import get_settings
 from ..db import engine
 from ..models import Activity, ActivityImportDiagnostic, ActivityRoute, ActivitySplit, BestEffort, ImportJob, TrackPoint
 from .derive import clean_points, computed_distance_m, generate_best_efforts, generate_splits, simplify_route
-from .parsers import ParsedTrackPoint, get_parser
+from .parsers import ParsedTrackPoint, get_parser, suffix_key
 from .strava_csv import RUN_SPORT_TYPES, StravaActivityRow, fallback_dedupe_key, file_sha256, read_activities_csv
 
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ def delete_activity(s: Session, activity: Activity) -> None:
     s.flush()
 
 
-def import_one_activity(job_id: int, row: StravaActivityRow, root: Path) -> str:
+def import_one_activity(job_id: int, row: StravaActivityRow, root: Path, force_reprocess_all: bool = False, force_reprocess_extensions: set[str] | None = None) -> str:
     path = resolve_activity_file(root, row.filename)
     if not path:
         with Session(engine) as s:
@@ -76,13 +76,15 @@ def import_one_activity(job_id: int, row: StravaActivityRow, root: Path) -> str:
         raise FileNotFoundError(f"activity file missing: {row.filename}")
     hash_ = file_sha256(path)
     key = fallback_dedupe_key(row) if not row.source_activity_id else None
+    ext = suffix_key(path).removesuffix(".gz").lstrip(".")
+    force_reprocess = force_reprocess_all or ext in (force_reprocess_extensions or set())
     with Session(engine) as s:
         existing = None
         if row.source_activity_id:
             existing = s.exec(select(Activity).where(Activity.source_activity_id == row.source_activity_id)).one_or_none()
         elif key:
             existing = s.exec(select(Activity).where(Activity.fallback_dedupe_key == key)).one_or_none()
-        if existing and existing.file_hash == hash_:
+        if existing and existing.file_hash == hash_ and not force_reprocess:
             s.add(diag(job_id,row,"skipped",activity_id=existing.id,parser_name=None,warnings=["unchanged_file_hash_skipped"]))
             s.commit(); return "skipped"
 
@@ -140,7 +142,7 @@ def safe_extract(zip_path: Path, dest: Path) -> None:
         z.extractall(dest)
 
 
-def process_import_job(job_id: int, zip_path: Path, tmp_dir: Path) -> None:
+def process_import_job(job_id: int, zip_path: Path, tmp_dir: Path, force_reprocess_all: bool = False, force_reprocess_extensions: set[str] | None = None) -> None:
     settings = get_settings()
     logger.info("Import job start", extra={"import_job_id": job_id})
     set_job(job_id, status="processing", started_at=datetime.now(timezone.utc))
@@ -157,7 +159,7 @@ def process_import_job(job_id: int, zip_path: Path, tmp_dir: Path) -> None:
                 inc_job(job_id, skipped_non_run_activities_count=1)
                 continue
             try:
-                result = import_one_activity(job_id, row, root)
+                result = import_one_activity(job_id, row, root, force_reprocess_all, force_reprocess_extensions)
                 inc = {"processed_count":1}
                 if result == "new": inc["new_count"] = 1
                 elif result == "skipped": inc["skipped_count"] = 1
