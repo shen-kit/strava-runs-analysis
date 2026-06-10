@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from ..db import get_session
 from ..models import Activity, ActivityRoute, ActivitySplit, BestEffort, TrackPoint
+from .stream_utils import build_streams, downsample_streams
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -57,27 +58,12 @@ def get_best_efforts(activity_id: int, session: Session = Depends(get_session)):
     return [r.model_dump() for r in rows]
 
 
-def downsample_streams(streams: dict[str, list[list[float]]]) -> dict[str, list[list[float]]]:
-    return streams
-
-
 @router.get("/{activity_id}/streams")
 def get_streams(activity_id: int, types: str = "pace,heart_rate,cadence,elevation", session: Session = Depends(get_session)):
     activity_or_404(session, activity_id)
     wanted = {x.strip() for x in types.split(",") if x.strip()}
     rows = session.exec(select(TrackPoint).where(TrackPoint.activity_id == activity_id).order_by(TrackPoint.point_index)).all()
-    streams: dict[str, list[list[float]]] = {k: [] for k in wanted}
-    prev = None; dist = 0.0
-    for p in rows:
-        if p.distance_m is not None: dist = p.distance_m
-        elif prev and p.lat is not None and p.lon is not None and prev.lat is not None and prev.lon is not None:
-            from ..importer.derive import haversine_m
-            dist += haversine_m(prev.lat, prev.lon, p.lat, p.lon)
-        if "heart_rate" in wanted and p.heart_rate_bpm is not None: streams["heart_rate"].append([dist, p.heart_rate_bpm])
-        if "cadence" in wanted and p.cadence_spm is not None: streams["cadence"].append([dist, p.cadence_spm])
-        if "elevation" in wanted and p.elevation_m is not None: streams["elevation"].append([dist, p.elevation_m])
-        if "pace" in wanted and p.speed_mps and p.speed_mps > 0: streams["pace"].append([dist, 1000.0 / p.speed_mps])
-        prev = p
+    streams = build_streams(rows, wanted)
     return {"activity_id":activity_id,"x_axis":"distance_m","streams":downsample_streams(streams)}
 
 

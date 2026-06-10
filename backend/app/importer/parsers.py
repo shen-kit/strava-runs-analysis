@@ -1,6 +1,7 @@
 from __future__ import annotations
 import gzip
 import logging
+import math
 import tempfile
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
@@ -70,6 +71,36 @@ def normalize_cadence(value: float | None) -> float | None:
     return value * 2 if 20 <= value < 130 else value
 
 
+def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1); dl = math.radians(lon2 - lon1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+
+
+def enrich_cumulative_distance(points: list[ParsedTrackPoint]) -> list[ParsedTrackPoint]:
+    """Post-normalization distance enrichment. Preserve monotonic source distances; fill gaps from GPS."""
+    cumulative = 0.0
+    prev_gps: ParsedTrackPoint | None = None
+    prev_distance: float | None = None
+    for p in points:
+        if prev_gps and p.lat is not None and p.lon is not None and prev_gps.lat is not None and prev_gps.lon is not None:
+            cumulative += haversine_m(prev_gps.lat, prev_gps.lon, p.lat, p.lon)
+        source_ok = p.distance_m is not None and p.distance_m >= 0 and (prev_distance is None or p.distance_m >= prev_distance)
+        if source_ok:
+            cumulative = float(p.distance_m)
+            prev_distance = cumulative
+        elif p.lat is not None and p.lon is not None:
+            p.distance_m = cumulative
+            prev_distance = cumulative
+        else:
+            p.distance_m = None
+        if p.lat is not None and p.lon is not None:
+            prev_gps = p
+    return points
+
+
 class TrackPointsFileParser:
     parser_name = "TrackPointsFileParser"
     supported_extensions: set[str] = set()
@@ -109,7 +140,7 @@ class GpxTrackPointsParser(TrackPointsFileParser):
 
     def parse(self, path: Path) -> list[ParsedTrackPoint]:
         raw = self.parse_file(path)
-        return self.normalize(raw)
+        return enrich_cumulative_distance(self.normalize(raw))
 
 
 class TcxTrackPointsParser(TrackPointsFileParser):
@@ -155,7 +186,7 @@ class TcxTrackPointsParser(TrackPointsFileParser):
 
     def parse(self, path: Path) -> list[ParsedTrackPoint]:
         raw = self.parse_file(path)
-        return self.normalize(raw)
+        return enrich_cumulative_distance(self.normalize(raw))
 
 
 class FitTrackPointsParser(TrackPointsFileParser):
@@ -196,7 +227,7 @@ class FitTrackPointsParser(TrackPointsFileParser):
 
     def parse(self, path: Path) -> list[ParsedTrackPoint]:
         raw = self.parse_file(path)
-        return self.normalize(raw)
+        return enrich_cumulative_distance(self.normalize(raw))
 
 
 PARSERS = [GpxTrackPointsParser(), TcxTrackPointsParser(), FitTrackPointsParser()]
