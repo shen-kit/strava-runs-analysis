@@ -61,6 +61,10 @@ function mergeElevation(data: ChartRow[], elevationData?: ChartRow[]) {
 }
 
 export function StreamLine({ data, yKey, name, kind = "generic", noData, xDomainKm, elevationData }: { data: ChartRow[]; yKey: string; name: string; kind?: "pace" | "elevation" | "generic"; noData?: string; xDomainKm?: [number, number]; elevationData?: ChartRow[] }) {
+  const hasPaceSlowerThan8 = kind === "pace" && data.some((d) => {
+    const v = d[yKey];
+    return typeof v === "number" && Number.isFinite(v) && v > 8;
+  });
   const mainData = kind === "pace" ? data.map((d) => {
     const v = d[yKey];
     return { ...d, [yKey]: typeof v === "number" && Number.isFinite(v) ? Math.min(v, 8) : null };
@@ -69,7 +73,9 @@ export function StreamLine({ data, yKey, name, kind = "generic", noData, xDomain
   const valid = chartData.filter((d) => typeof d[yKey] === "number" && Number.isFinite(d[yKey] as number));
   if (!valid.length) return <div className="rounded bg-slate-100 p-6 text-slate-500">{noData ?? "No data"}</div>;
   const yValues = valid.map((d) => d[yKey] as number).filter((v) => kind !== "pace" || (v > 1 && v <= 8));
-  const domain = kind === "pace" ? [Math.max(0, Math.min(...yValues) - 0.25), 8] as [number, number] : kind === "elevation" ? valueDomain(yValues, 2) : ["auto", "auto"];
+  const domain = kind === "pace"
+    ? (hasPaceSlowerThan8 ? [Math.max(0, Math.min(...yValues) - 0.25), 8] as [number, number] : valueDomain(yValues, 0.25))
+    : kind === "elevation" ? valueDomain(yValues, 2) : ["auto", "auto"];
   const elevationValues = chartData.map((d) => d.elevationOverlay).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   const elevationDomain = valueDomain(elevationValues, 2);
   const hasElevationOverlay = kind !== "elevation" && elevationValues.length > 0;
