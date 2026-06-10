@@ -89,8 +89,34 @@ def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
+def _fill_missing_distances_by_time(points: list[ParsedTrackPoint]) -> None:
+    anchors = [p for p in points if p.timestamp is not None and p.distance_m is not None]
+    if not anchors:
+        return
+    anchors.sort(key=lambda p: p.timestamp)
+    exact: dict[datetime, float] = {}
+    for p in anchors:
+        exact.setdefault(p.timestamp, float(p.distance_m))
+    for p in points:
+        if p.distance_m is not None or p.timestamp is None:
+            continue
+        if p.timestamp in exact:
+            p.distance_m = exact[p.timestamp]
+            continue
+        prev = next((a for a in reversed(anchors) if a.timestamp <= p.timestamp), None)
+        nxt = next((a for a in anchors if a.timestamp >= p.timestamp), None)
+        if prev and nxt and nxt.timestamp > prev.timestamp:
+            dt = (nxt.timestamp - prev.timestamp).total_seconds()
+            f = (p.timestamp - prev.timestamp).total_seconds() / dt
+            p.distance_m = float(prev.distance_m) + (float(nxt.distance_m) - float(prev.distance_m)) * f
+        elif prev:
+            p.distance_m = float(prev.distance_m)
+        elif nxt:
+            p.distance_m = float(nxt.distance_m)
+
+
 def enrich_cumulative_distance(points: list[ParsedTrackPoint]) -> list[ParsedTrackPoint]:
-    """Post-normalization distance enrichment. Preserve monotonic source distances; fill gaps from GPS."""
+    """Post-normalization distance enrichment. Preserve monotonic source distances; fill GPS + sensor-only samples."""
     cumulative = 0.0
     prev_gps: ParsedTrackPoint | None = None
     prev_distance: float | None = None
@@ -108,6 +134,7 @@ def enrich_cumulative_distance(points: list[ParsedTrackPoint]) -> list[ParsedTra
             p.distance_m = None
         if p.lat is not None and p.lon is not None:
             prev_gps = p
+    _fill_missing_distances_by_time(points)
     return points
 
 
@@ -225,11 +252,13 @@ class FitTrackPointsParser(TrackPointsFileParser):
             ts = row.get("timestamp")
             if isinstance(ts, datetime) and ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
-            speed = row.get("enhanced_speed", row.get("speed"))
-            elev = row.get("enhanced_altitude", row.get("altitude"))
+            speed = row.get("enhanced_speed") if row.get("enhanced_speed") is not None else row.get("speed")
+            elev = normalize_elevation(row.get("enhanced_altitude"))
+            if elev is None:
+                elev = normalize_elevation(row.get("altitude"))
             points.append(ParsedTrackPoint(
                 timestamp=ts if isinstance(ts, datetime) else None,
-                lat=_float(lat), lon=_float(lon), elevation_m=normalize_elevation(elev),
+                lat=_float(lat), lon=_float(lon), elevation_m=elev,
                 distance_m=_float(row.get("distance")), heart_rate_bpm=_int(row.get("heart_rate")),
                 cadence_spm=normalize_cadence(_float(row.get("cadence"))), speed_mps=_float(speed),
             ))

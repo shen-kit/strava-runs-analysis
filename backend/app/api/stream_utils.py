@@ -24,6 +24,29 @@ def valid_elevation(v: float | None) -> float | None:
     return float(v)
 
 
+def _fill_missing_stream_distances_by_time(points: list[StreamPoint]) -> None:
+    anchors = [p for p in points if p.elapsed_time_s is not None and p.distance_m is not None]
+    if not anchors:
+        return
+    anchors.sort(key=lambda p: p.elapsed_time_s or 0)
+    for p in points:
+        if p.distance_m is not None or p.elapsed_time_s is None:
+            continue
+        exact = next((a for a in anchors if a.elapsed_time_s == p.elapsed_time_s), None)
+        if exact:
+            p.distance_m = exact.distance_m
+            continue
+        prev = next((a for a in reversed(anchors) if (a.elapsed_time_s or 0) <= (p.elapsed_time_s or 0)), None)
+        nxt = next((a for a in anchors if (a.elapsed_time_s or 0) >= (p.elapsed_time_s or 0)), None)
+        if prev and nxt and nxt.elapsed_time_s is not None and prev.elapsed_time_s is not None and nxt.elapsed_time_s > prev.elapsed_time_s:
+            f = ((p.elapsed_time_s or 0) - prev.elapsed_time_s) / (nxt.elapsed_time_s - prev.elapsed_time_s)
+            p.distance_m = float(prev.distance_m or 0) + (float(nxt.distance_m or 0) - float(prev.distance_m or 0)) * f
+        elif prev:
+            p.distance_m = prev.distance_m
+        elif nxt:
+            p.distance_m = nxt.distance_m
+
+
 def with_cumulative_distance(rows: Iterable) -> list[StreamPoint]:
     out: list[StreamPoint] = []
     dist = 0.0
@@ -38,6 +61,7 @@ def with_cumulative_distance(rows: Iterable) -> list[StreamPoint]:
         out.append(StreamPoint(d, p.elapsed_time_s, p.lat, p.lon, valid_elevation(p.elevation_m), p.heart_rate_bpm, p.cadence_spm))
         if p.lat is not None and p.lon is not None:
             prev_gps = p
+    _fill_missing_stream_distances_by_time(out)
     return out
 
 
