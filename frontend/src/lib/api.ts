@@ -6,9 +6,9 @@ export type Activity = {
   avg_cadence_spm?: number; source_activity_id?: string; source_filename?: string;
 };
 export type ImportJob = { status: string; run_activities_seen: number; processed_count: number; new_count: number; skipped_count: number; reprocessed_count: number; failed_count: number; skipped_non_run_activities_count: number; error_message?: string | null };
-export type Summary = { total_runs: number; total_distance_m: number; total_moving_time_s: number; total_elevation_gain_m: number; average_pace_s_per_km?: number | null; longest_run_distance_m: number; latest_activity_date?: string | null };
+export type Summary = { total_runs: number; total_distance_m: number; total_moving_time_s: number; total_elevation_gain_m: number; average_pace_s_per_km?: number | null; longest_run_distance_m: number; latest_activity_date?: string | null; current_month_distance_m: number; current_year_distance_m: number };
 export type StatRow = Record<string, string | number | null>;
-export type TotalRow = { bucket: string; run_count: number; distance_m: number; moving_time_s: number; elevation_gain_m: number };
+export type TotalRow = { bucket: string; run_count: number; days_run?: number; distance_m: number; moving_time_s: number; elevation_gain_m: number; rolling_4_week_avg_distance_m?: number | null };
 export type PersonalBest = { distance_m: number; duration_s: number; pace_s_per_km: number; activity_id: number; activity_title: string; local_date: string };
 export type RouteResponse = { simplified_points_json: [number, number, number | null][]; original_point_count: number; simplified_point_count: number; simplification_tolerance_m?: number | null };
 export type StreamResponse = { x_domain_m: [number, number]; streams: Record<string, [number, number | null][]> };
@@ -24,9 +24,14 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   summary: () => request<Summary>("/stats/summary"),
   totals: (bucket = "week") => request<TotalRow[]>(`/stats/totals?bucket=${bucket}`),
+  weeklyVolume: () => request<TotalRow[]>("/stats/weekly-volume"),
+  consistency: () => request<{weeks: TotalRow[]; current_week_count: number; average_runs_per_week: number}>("/stats/consistency"),
   paceTrend: (bucket = "week") => request<StatRow[]>(`/stats/pace-trend?bucket=${bucket}`),
   elevation: (bucket = "week") => request<StatRow[]>(`/stats/elevation?bucket=${bucket}`),
   personalBests: () => request<PersonalBest[]>("/stats/personal-bests"),
+  bestEffortTrend: (distances = "1000,5000,10000") => request<StatRow[]>(`/stats/best-effort-trend?distances=${distances}`),
+  longRunProgression: (bucket = "week") => request<StatRow[]>(`/stats/long-run-progression?bucket=${bucket}`),
+  distanceDistribution: () => request<StatRow[]>("/stats/distance-distribution"),
   activities: (params = "limit=50") => request<Activity[]>(`/activities?${params}`),
   activity: (id: number) => request<Activity>(`/activities/${id}`),
   route: (id: number) => request<RouteResponse>(`/activities/${id}/route`),
