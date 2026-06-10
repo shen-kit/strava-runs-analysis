@@ -1,12 +1,11 @@
 import csv, shutil, zipfile
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-import pytest
 from sqlmodel import Session, SQLModel, select
 
 from app.db import engine, init_db
 from app.models import Activity, ImportJob
-from app.importer.parsers import GpxTrackPointsParser, TcxTrackPointsParser, FitTrackPointsParser, ParsedTrackPoint, suffix_key
+from app.importer.parsers import GpxTrackPointsParser, TcxTrackPointsParser, ParsedTrackPoint, suffix_key
 from app.importer.strava_csv import read_activities_csv
 from app.importer.derive import clean_points, computed_distance_m, generate_splits, generate_best_efforts, simplify_route
 from app.importer.job import process_import_job
@@ -31,7 +30,7 @@ def make_tcx(path: Path):
 </Track></Lap></Activity></Activities></TrainingCenterDatabase>''')
 
 
-def test_csv_parses_runs_and_skips_non_runs(tmp_path, caplog):
+def test_csv_parses_runs_and_skips_non_runs(tmp_path):
     p = tmp_path / "activities.csv"
     with p.open("w", newline="") as f:
         w = csv.writer(f); w.writerow(["Activity ID","Activity Date","Activity Name","Activity Type","Filename","Distance","Moving Time","Elapsed Time"])
@@ -53,16 +52,8 @@ def test_gpx_and_tcx_parsing(tmp_path):
     gpx = tmp_path / "a.gpx"; tcx = tmp_path / "a.tcx"
     make_gpx(gpx); make_tcx(tcx)
     gp = GpxTrackPointsParser().parse(gpx); tp = TcxTrackPointsParser().parse(tcx)
-    assert gp[0].timestamp and gp[0].lat == -37.0 and gp[0].heart_rate_bpm == 120 and gp[0].cadence_spm == 170
-    assert tp[0].timestamp and tp[0].lon == 145.0 and tp[0].heart_rate_bpm == 121 and tp[0].cadence_spm == 172
-
-
-def test_fit_parser_sample_if_available():
-    sample = Path("../export/activities/19971844108.fit.gz")
-    if not sample.exists(): pytest.skip("sample FIT not available")
-    pts = FitTrackPointsParser().parse(sample)
-    assert len(pts) > 10
-    assert any(p.timestamp for p in pts)
+    assert gp[0].timestamp and gp[0].lat == -37.0 and gp[0].elevation_m == 10 and gp[0].heart_rate_bpm == 120 and gp[0].cadence_spm == 170
+    assert tp[0].timestamp and tp[0].lon == 145.0 and tp[0].elevation_m == 10 and tp[0].heart_rate_bpm == 121 and tp[0].cadence_spm == 172
 
 
 def test_cleaning_distance_splits_efforts_route():

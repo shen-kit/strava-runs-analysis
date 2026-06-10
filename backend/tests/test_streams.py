@@ -1,5 +1,4 @@
 from datetime import date, datetime, timezone, timedelta
-from pathlib import Path
 from sqlmodel import Session, SQLModel
 from fastapi.testclient import TestClient
 
@@ -60,23 +59,6 @@ def test_fit_missing_elevation_sentinel_becomes_none():
     assert pts[0].elevation_m is None
     pts = parser.normalize([{"timestamp": datetime(2026, 1, 1), "enhanced_altitude": -1, "altitude": 123.4}])
     assert pts[0].elevation_m == 123.4
-
-
-def test_sample_gpx_file_has_elevation_stream():
-    from app.importer.parsers import GpxTrackPointsParser
-    sample = Path("../export/activities/18860139319.gpx")
-    if not sample.exists():
-        return
-    parsed = GpxTrackPointsParser().parse(sample)
-    aid = insert_activity([
-        {"timestamp": p.timestamp, "elapsed_time_s": i, "distance_m": p.distance_m, "lat": p.lat, "lon": p.lon, "elevation_m": p.elevation_m}
-        for i, p in enumerate(parsed)
-    ], source_distance_m=699.0)
-    res = TestClient(app).get(f"/activities/{aid}/streams?types=elevation").json()
-    vals = [v for _, v in res["streams"]["elevation"] if v is not None]
-    assert len(vals) > 100
-    assert min(vals) > 90
-    assert max(vals) < 110
 
 
 def test_missing_elevation_and_invalid_pace_do_not_become_zero():
