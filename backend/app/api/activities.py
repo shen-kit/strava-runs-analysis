@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from ..db import get_session
 from ..models import Activity, ActivityRoute, ActivitySplit, BestEffort, TrackPoint
-from .stream_utils import build_streams, downsample_streams
+from .stream_utils import build_streams, downsample_streams, with_cumulative_distance
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -66,6 +66,56 @@ def get_streams(activity_id: int, types: str = "pace,heart_rate,cadence,elevatio
     full_distance_m = activity.source_distance_m or activity.computed_distance_m or max([p.distance_m or 0 for p in rows], default=0)
     streams = build_streams(rows, wanted, full_distance_m)
     return {"activity_id":activity_id,"x_axis":"distance_m","x_domain_m":[0, full_distance_m],"streams":downsample_streams(streams)}
+
+
+def _interp_stream(stream: list[list[float | None]], distance_m: float) -> float | None:
+    pts = [(float(d), float(v)) for d, v in stream if d is not None and v is not None]
+    if not pts:
+        return None
+    if distance_m <= pts[0][0]:
+        return pts[0][1]
+    for (d1, v1), (d2, v2) in zip(pts, pts[1:]):
+        if d1 <= distance_m <= d2 and d2 > d1:
+            f = (distance_m - d1) / (d2 - d1)
+            return v1 + (v2 - v1) * f
+    return pts[-1][1] if distance_m <= pts[-1][0] else None
+
+
+@router.get("/{activity_id}/route-overlay")
+def get_route_overlay(activity_id: int, metric: str = Query("pace", pattern="^(pace|heart_rate|gradient|cadence)$"), session: Session = Depends(get_session)):
+    activity = activity_or_404(session, activity_id)
+    rows = session.exec(select(TrackPoint).where(TrackPoint.activity_id == activity_id).order_by(TrackPoint.point_index)).all()
+    full_distance_m = activity.source_distance_m or activity.computed_distance_m or max([p.distance_m or 0 for p in rows], default=0)
+    points = with_cumulative_distance(rows)
+    gps = [p for p in points if p.lat is not None and p.lon is not None and p.distance_m is not None]
+    markers = []
+    if gps:
+        markers.append({"type":"start","coordinates":[gps[0].lon, gps[0].lat]})
+        markers.append({"type":"finish","coordinates":[gps[-1].lon, gps[-1].lat]})
+        for a, b in zip(gps, gps[1:]):
+            if a.elapsed_time_s is not None and b.elapsed_time_s is not None and b.elapsed_time_s - a.elapsed_time_s > 60:
+                markers.append({"type":"pause","coordinates":[b.lon, b.lat], "gap_s": b.elapsed_time_s - a.elapsed_time_s})
+
+    stream_types = {"pace":"pace", "heart_rate":"heart_rate", "cadence":"cadence", "gradient":"elevation"}
+    streams = build_streams(rows, {stream_types[metric]}, full_distance_m)
+    stream = streams.get(stream_types[metric], [])
+    features = []
+    for a, b in zip(gps, gps[1:]):
+        if b.distance_m <= a.distance_m:
+            continue
+        mid = (a.distance_m + b.distance_m) / 2
+        if metric == "gradient":
+            e1 = _interp_stream(stream, max(0, mid - 50)); e2 = _interp_stream(stream, min(full_distance_m, mid + 50))
+            span = min(full_distance_m, mid + 50) - max(0, mid - 50)
+            value = ((e2 - e1) / span * 100) if e1 is not None and e2 is not None and span > 0 else None
+        else:
+            value = _interp_stream(stream, mid)
+        if value is None:
+            continue
+        features.append({"type":"Feature","properties":{"value":float(value)},"geometry":{"type":"LineString","coordinates":[[a.lon,a.lat],[b.lon,b.lat]]}})
+    vals = [f["properties"]["value"] for f in features]
+    units = {"pace":"s_per_km", "heart_rate":"bpm", "gradient":"percent", "cadence":"spm"}
+    return {"activity_id":activity_id,"metric":metric,"unit":units[metric],"min_value":min(vals) if vals else None,"max_value":max(vals) if vals else None,"has_heart_rate":any(p.heart_rate_bpm is not None for p in rows),"has_cadence":any(p.cadence_spm is not None for p in rows),"markers":markers,"geojson":{"type":"FeatureCollection","features":features}}
 
 
 @router.get("/{activity_id}/track-points")

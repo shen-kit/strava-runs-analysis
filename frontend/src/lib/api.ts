@@ -1,3 +1,5 @@
+import type { FeatureCollection, Geometry } from "geojson";
+
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
 export type Activity = {
@@ -12,6 +14,8 @@ export type TotalRow = { bucket: string; run_count: number; days_run?: number; d
 export type PersonalBest = { distance_m: number; duration_s: number; pace_s_per_km: number; activity_id: number; activity_title: string; local_date: string };
 export type RouteResponse = { simplified_points_json: [number, number, number | null][]; original_point_count: number; simplified_point_count: number; simplification_tolerance_m?: number | null };
 export type StreamResponse = { x_domain_m: [number, number]; streams: Record<string, [number, number | null][]> };
+export type RouteOverlayMetric = "pace" | "heart_rate" | "gradient" | "cadence";
+export type RouteOverlayResponse = { metric: RouteOverlayMetric; unit: string; min_value?: number | null; max_value?: number | null; has_heart_rate: boolean; has_cadence: boolean; markers: {type: "start" | "finish" | "pause"; coordinates: [number, number]; gap_s?: number}[]; geojson: FeatureCollection<Geometry> };
 export type Split = { id: number; split_index: number; duration_s: number; avg_pace_s_per_km?: number | null; avg_heart_rate_bpm?: number | null };
 export type BestEffort = { distance_m: number; duration_s: number; pace_s_per_km: number };
 
@@ -35,6 +39,7 @@ export const api = {
   activities: (params = "limit=50") => request<Activity[]>(`/activities?${params}`),
   activity: (id: number) => request<Activity>(`/activities/${id}`),
   route: (id: number) => request<RouteResponse>(`/activities/${id}/route`),
+  routeOverlay: (id: number, metric: RouteOverlayMetric) => request<RouteOverlayResponse>(`/activities/${id}/route-overlay?metric=${metric}`),
   splits: (id: number) => request<Split[]>(`/activities/${id}/splits`),
   bestEfforts: (id: number) => request<BestEffort[]>(`/activities/${id}/best-efforts`),
   streams: (id: number, types = "pace,heart_rate,cadence,elevation") => request<StreamResponse>(`/activities/${id}/streams?types=${types}`),
