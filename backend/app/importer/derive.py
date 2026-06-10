@@ -167,7 +167,7 @@ def rdp(points: list[tuple[float,float,float|None]], tol: float) -> list[tuple[f
     return [a,b]
 
 
-def simplify_route(points: list[CleanPoint], tolerance_m: float = 10.0) -> dict | None:
+def simplify_route(points: list[CleanPoint], tolerance_m: float = 3.0) -> dict | None:
     raw=[(p.lat,p.lon,p.elevation_m) for p in points if p.lat is not None and p.lon is not None]
     if len(raw) < 2: return None
     simp=rdp(raw,tolerance_m)
