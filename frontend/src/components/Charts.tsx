@@ -23,11 +23,15 @@ function valueDomain(values: number[], pad: number) {
   return [Math.max(0, min - p), max + p] as [number, number];
 }
 
-export function StreamLine({ data, yKey, name, kind = "generic", noData }: { data: ChartRow[]; yKey: string; name: string; kind?: "pace" | "elevation" | "generic"; noData?: string }) {
-  const valid = data.filter((d) => typeof d[yKey] === "number" && Number.isFinite(d[yKey] as number));
+export function StreamLine({ data, yKey, name, kind = "generic", noData, xDomainKm }: { data: ChartRow[]; yKey: string; name: string; kind?: "pace" | "elevation" | "generic"; noData?: string; xDomainKm?: [number, number] }) {
+  const chartData = kind === "pace" ? data.map((d) => {
+    const v = d[yKey];
+    return { ...d, [yKey]: typeof v === "number" && Number.isFinite(v) ? Math.min(v, 8) : null };
+  }) : data;
+  const valid = chartData.filter((d) => typeof d[yKey] === "number" && Number.isFinite(d[yKey] as number));
   if (!valid.length) return <div className="rounded bg-slate-100 p-6 text-slate-500">{noData ?? "No data"}</div>;
-  const yValues = valid.map((d) => d[yKey] as number).filter((v) => kind !== "pace" || (v > 1 && v < 20));
-  const domain = kind === "pace" ? valueDomain(yValues, 0.25) : kind === "elevation" ? valueDomain(yValues, 2) : ["auto", "auto"];
+  const yValues = valid.map((d) => d[yKey] as number).filter((v) => kind !== "pace" || (v > 1 && v <= 8));
+  const domain = kind === "pace" ? [Math.max(0, Math.min(...yValues) - 0.25), 8] as [number, number] : kind === "elevation" ? valueDomain(yValues, 2) : ["auto", "auto"];
   const yTick = (v: number) => kind === "pace" ? formatPace(v * 60).replace(" /km", "") : kind === "elevation" ? `${Math.round(v)}m` : String(v);
   const tooltipFormatter = (v: unknown) => {
     const n = Number(v);
@@ -35,5 +39,5 @@ export function StreamLine({ data, yKey, name, kind = "generic", noData }: { dat
     if (kind === "elevation") return `${Math.round(n)} m`;
     return n;
   };
-  return <div className="h-56"><ResponsiveContainer><LineChart data={valid}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="km" type="number" tickFormatter={distanceTick} label={{ value: "Distance (km)", position: "insideBottom", offset: -4 }} domain={["dataMin", "dataMax"]}/><YAxis tickFormatter={yTick} domain={domain}/><Tooltip formatter={tooltipFormatter} labelFormatter={(v) => `Distance ${distanceTick(Number(v))}`}/><Line dot={false} connectNulls={false} type="monotone" dataKey={yKey} name={name} stroke="#16a34a"/></LineChart></ResponsiveContainer></div>;
+  return <div className="h-56"><ResponsiveContainer><LineChart data={chartData}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="km" type="number" tickFormatter={distanceTick} label={{ value: "Distance (km)", position: "insideBottom", offset: -4 }} domain={xDomainKm ?? ["dataMin", "dataMax"]}/><YAxis tickFormatter={yTick} domain={domain} reversed={kind === "pace"}/><Tooltip formatter={tooltipFormatter} labelFormatter={(v) => `Distance ${distanceTick(Number(v))}`}/><Line dot={false} connectNulls={false} type="monotone" dataKey={yKey} name={name} stroke="#16a34a"/></LineChart></ResponsiveContainer></div>;
 }

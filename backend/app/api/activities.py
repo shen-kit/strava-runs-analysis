@@ -60,11 +60,12 @@ def get_best_efforts(activity_id: int, session: Session = Depends(get_session)):
 
 @router.get("/{activity_id}/streams")
 def get_streams(activity_id: int, types: str = "pace,heart_rate,cadence,elevation", session: Session = Depends(get_session)):
-    activity_or_404(session, activity_id)
+    activity = activity_or_404(session, activity_id)
     wanted = {x.strip() for x in types.split(",") if x.strip()}
     rows = session.exec(select(TrackPoint).where(TrackPoint.activity_id == activity_id).order_by(TrackPoint.point_index)).all()
-    streams = build_streams(rows, wanted)
-    return {"activity_id":activity_id,"x_axis":"distance_m","streams":downsample_streams(streams)}
+    full_distance_m = activity.source_distance_m or activity.computed_distance_m or max([p.distance_m or 0 for p in rows], default=0)
+    streams = build_streams(rows, wanted, full_distance_m)
+    return {"activity_id":activity_id,"x_axis":"distance_m","x_domain_m":[0, full_distance_m],"streams":downsample_streams(streams)}
 
 
 @router.get("/{activity_id}/track-points")

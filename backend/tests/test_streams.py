@@ -5,8 +5,7 @@ from fastapi.testclient import TestClient
 from app.db import engine, init_db
 from app.main import app
 from app.models import Activity, TrackPoint
-from app.importer.parsers import ParsedTrackPoint, enrich_cumulative_distance
-from app.api.stream_utils import build_streams
+from app.importer.parsers import FitTrackPointsParser, ParsedTrackPoint, enrich_cumulative_distance, normalize_elevation
 
 
 def setup_function():
@@ -27,13 +26,26 @@ def test_gpx_like_points_without_distance_get_cumulative_distance():
     assert pts[2].distance_m and pts[2].distance_m > pts[1].distance_m
 
 
-def insert_activity(points: list[dict]) -> int:
+def insert_activity(points: list[dict], source_distance_m: float | None = None) -> int:
     with Session(engine) as s:
-        a = Activity(title="stream test", source_sport_type="Run", local_date=date(2026, 1, 1))
+        a = Activity(title="stream test", source_sport_type="Run", local_date=date(2026, 1, 1), source_distance_m=source_distance_m)
         s.add(a); s.flush()
         for i, p in enumerate(points):
             s.add(TrackPoint(activity_id=a.id, point_index=i, **p))
         s.commit(); return a.id
+
+
+def test_missing_elevation_normalizer_does_not_emit_minus_one_or_zero():
+    assert normalize_elevation(None) is None
+    assert normalize_elevation(-1) is None
+    assert normalize_elevation(0) == 0
+    assert normalize_elevation(123.4) == 123.4
+
+
+def test_fit_missing_elevation_sentinel_becomes_none():
+    parser = FitTrackPointsParser()
+    pts = parser.normalize([{"timestamp": datetime(2026, 1, 1), "enhanced_altitude": -1, "altitude": -1}])
+    assert pts[0].elevation_m is None
 
 
 def test_missing_elevation_and_invalid_pace_do_not_become_zero():
@@ -43,8 +55,9 @@ def test_missing_elevation_and_invalid_pace_do_not_become_zero():
         {"timestamp": t + timedelta(seconds=10), "elapsed_time_s": 10, "distance_m": 10, "elevation_m": None, "speed_mps": 0},
     ])
     res = TestClient(app).get(f"/activities/{aid}/streams?types=pace,elevation").json()
-    assert res["streams"]["elevation"] == []
-    assert res["streams"]["pace"] == []
+    assert res["x_domain_m"] == [0, 10.0]
+    assert res["streams"]["elevation"] == [[0.0, None], [10.0, None]]
+    assert res["streams"]["pace"] == [[0.0, None], [10.0, None]]
 
 
 def test_smoothed_pace_stable_synthetic_run():
@@ -54,7 +67,10 @@ def test_smoothed_pace_stable_synthetic_run():
         for i in range(11)
     ])
     res = TestClient(app).get(f"/activities/{aid}/streams?types=pace").json()
-    pace = [v for _, v in res["streams"]["pace"]]
+    assert res["x_domain_m"] == [0, 1000.0]
+    assert res["streams"]["pace"][0] == [0.0, None]
+    assert res["streams"]["pace"][-1] == [1000.0, None]
+    pace = [v for _, v in res["streams"]["pace"] if v is not None]
     assert pace
     assert all(295 <= v <= 305 for v in pace)
     assert 0 not in pace
@@ -67,10 +83,35 @@ def test_elevation_smoothing_preserves_real_values_ignores_missing():
         for i in range(8)
     ])
     res = TestClient(app).get(f"/activities/{aid}/streams?types=elevation").json()
-    elev = [v for _, v in res["streams"]["elevation"]]
+    elev = [v for _, v in res["streams"]["elevation"] if v is not None]
     assert elev
     assert all(v >= 100 for v in elev)
     assert 0 not in elev
+
+
+def test_elevation_stream_omits_minus_one_sentinel_and_all_missing_has_boundaries_only():
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    aid = insert_activity([
+        {"timestamp": t + timedelta(seconds=i * 10), "elapsed_time_s": i * 10, "distance_m": i * 50, "elevation_m": -1}
+        for i in range(4)
+    ], source_distance_m=300)
+    res = TestClient(app).get(f"/activities/{aid}/streams?types=elevation,heart_rate").json()
+    assert res["x_domain_m"] == [0, 300.0]
+    assert res["streams"]["elevation"] == [[0.0, None], [300.0, None]]
+    assert all(v != -1 for _, v in res["streams"]["elevation"])
+
+
+def test_stream_domain_uses_source_distance_and_boundaries_when_values_start_late_end_early():
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    aid = insert_activity([
+        {"timestamp": t, "elapsed_time_s": 0, "distance_m": 100, "heart_rate_bpm": 120},
+        {"timestamp": t + timedelta(seconds=60), "elapsed_time_s": 60, "distance_m": 500, "heart_rate_bpm": 130},
+    ], source_distance_m=1000)
+    res = TestClient(app).get(f"/activities/{aid}/streams?types=heart_rate").json()
+    assert res["x_domain_m"] == [0, 1000.0]
+    assert res["streams"]["heart_rate"][0] == [0.0, None]
+    assert res["streams"]["heart_rate"][-1] == [1000.0, None]
+    assert [100.0, 120.0] in res["streams"]["heart_rate"]
 
 
 def test_gpx_like_activity_has_pace_without_source_distance():
@@ -81,4 +122,4 @@ def test_gpx_like_activity_has_pace_without_source_distance():
     ])
     res = TestClient(app).get(f"/activities/{aid}/streams?types=pace").json()
     assert res["streams"]["pace"]
-    assert all(v > 0 for _, v in res["streams"]["pace"])
+    assert all(v > 0 for _, v in res["streams"]["pace"] if v is not None)

@@ -4,6 +4,8 @@ from statistics import median
 from typing import Iterable
 from ..importer.derive import MAX_RUNNING_SPEED_MPS, haversine_m
 
+Stream = list[list[float | None]]
+
 
 @dataclass
 class StreamPoint:
@@ -14,6 +16,12 @@ class StreamPoint:
     elevation_m: float | None
     heart_rate_bpm: float | None
     cadence_spm: float | None
+
+
+def valid_elevation(v: float | None) -> float | None:
+    if v is None or v == -1:
+        return None
+    return float(v)
 
 
 def with_cumulative_distance(rows: Iterable) -> list[StreamPoint]:
@@ -27,8 +35,7 @@ def with_cumulative_distance(rows: Iterable) -> list[StreamPoint]:
         elif prev_gps and p.lat is not None and p.lon is not None and prev_gps.lat is not None and prev_gps.lon is not None:
             dist += haversine_m(prev_gps.lat, prev_gps.lon, p.lat, p.lon)
         d = dist if (source is not None or p.lat is not None and p.lon is not None) else None
-        sp = StreamPoint(d, p.elapsed_time_s, p.lat, p.lon, p.elevation_m, p.heart_rate_bpm, p.cadence_spm)
-        out.append(sp)
+        out.append(StreamPoint(d, p.elapsed_time_s, p.lat, p.lon, valid_elevation(p.elevation_m), p.heart_rate_bpm, p.cadence_spm))
         if p.lat is not None and p.lon is not None:
             prev_gps = p
     return out
@@ -48,11 +55,11 @@ def _interp_elapsed(points: list[StreamPoint], target_d: float) -> float | None:
     return None
 
 
-def smoothed_pace_stream(points: list[StreamPoint], window_m: float = 50.0) -> list[list[float]]:
+def smoothed_pace_stream(points: list[StreamPoint], window_m: float = 50.0) -> Stream:
     valid = [p for p in points if p.distance_m is not None and p.elapsed_time_s is not None]
     if len(valid) < 3:
         return []
-    out: list[list[float]] = []
+    out: Stream = []
     half = window_m / 2
     min_d, max_d = valid[0].distance_m or 0, valid[-1].distance_m or 0
     for p in valid:
@@ -72,35 +79,61 @@ def smoothed_pace_stream(points: list[StreamPoint], window_m: float = 50.0) -> l
     return out
 
 
-def smoothed_elevation_stream(points: list[StreamPoint], window_m: float = 50.0) -> list[list[float]]:
-    valid = [p for p in points if p.distance_m is not None and p.elevation_m is not None]
+def smoothed_elevation_stream(points: list[StreamPoint], window_m: float = 50.0) -> Stream:
+    valid = [p for p in points if p.distance_m is not None and valid_elevation(p.elevation_m) is not None]
     if len(valid) < 2:
         return []
-    out: list[list[float]] = []
+    out: Stream = []
     half = window_m / 2
     for p in valid:
         d = p.distance_m
         if d is None:
             continue
-        vals = [q.elevation_m for q in valid if q.distance_m is not None and abs(q.distance_m - d) <= half and q.elevation_m is not None]
+        vals = [valid_elevation(q.elevation_m) for q in valid if q.distance_m is not None and abs(q.distance_m - d) <= half]
+        vals = [v for v in vals if v is not None]
         if vals:
             out.append([d, float(median(vals))])
     return out
 
 
-def sensor_stream(points: list[StreamPoint], attr: str) -> list[list[float]]:
-    out = []
+def sensor_stream(points: list[StreamPoint], attr: str) -> Stream:
+    out: Stream = []
     for p in points:
         d = p.distance_m
         v = getattr(p, attr)
-        if d is not None and v is not None:
+        if d is not None and d >= 0 and v is not None:
             out.append([d, float(v)])
     return out
 
 
-def build_streams(rows: Iterable, wanted: set[str]) -> dict[str, list[list[float]]]:
+def add_boundaries(stream: Stream, full_distance_m: float) -> Stream:
+    points: Stream = []
+    seen: set[float] = set()
+    for d, v in stream:
+        if d is None or d < 0:
+            continue
+        clamped = max(0.0, min(float(d), full_distance_m))
+        key = round(clamped, 6)
+        if key in seen:
+            continue
+        seen.add(key)
+        points.append([clamped, v])
+    points.sort(key=lambda x: float(x[0] or 0))
+    if not points or (points[0][0] or 0) > 0:
+        points.insert(0, [0.0, None])
+    elif points[0][0] != 0:
+        points[0][0] = 0.0
+    if full_distance_m > 0:
+        if not points or (points[-1][0] or 0) < full_distance_m:
+            points.append([full_distance_m, None])
+        elif points[-1][0] != full_distance_m and abs(float(points[-1][0] or 0) - full_distance_m) < 1e-6:
+            points[-1][0] = full_distance_m
+    return points
+
+
+def build_streams(rows: Iterable, wanted: set[str], full_distance_m: float) -> dict[str, Stream]:
     points = with_cumulative_distance(rows)
-    streams: dict[str, list[list[float]]] = {}
+    streams: dict[str, Stream] = {}
     if "pace" in wanted:
         streams["pace"] = smoothed_pace_stream(points)
     if "elevation" in wanted:
@@ -109,8 +142,8 @@ def build_streams(rows: Iterable, wanted: set[str]) -> dict[str, list[list[float
         streams["heart_rate"] = sensor_stream(points, "heart_rate_bpm")
     if "cadence" in wanted:
         streams["cadence"] = sensor_stream(points, "cadence_spm")
-    return streams
+    return {name: add_boundaries(stream, full_distance_m) for name, stream in streams.items()}
 
 
-def downsample_streams(streams: dict[str, list[list[float]]]) -> dict[str, list[list[float]]]:
+def downsample_streams(streams: dict[str, Stream]) -> dict[str, Stream]:
     return streams

@@ -64,6 +64,16 @@ def _int(v: Any) -> int | None:
     return int(round(f)) if f is not None else None
 
 
+def normalize_elevation(value: Any) -> float | None:
+    f = _float(value)
+    if f is None:
+        return None
+    # Common FIT/Strava sentinel/default for missing altitude.
+    if f == -1:
+        return None
+    return f
+
+
 def normalize_cadence(value: float | None) -> float | None:
     if value is None:
         return None
@@ -126,7 +136,7 @@ class GpxTrackPointsParser(TrackPointsFileParser):
                 name = _strip(child.tag).lower()
                 text = child.text.strip() if child.text else None
                 if name == "ele":
-                    p.elevation_m = _float(text)
+                    p.elevation_m = normalize_elevation(text)
                 elif name == "time":
                     p.timestamp = parse_time(text)
                 elif name in {"hr", "heartrate"}:
@@ -167,7 +177,7 @@ class TcxTrackPointsParser(TrackPointsFileParser):
                 elif name == "LongitudeDegrees":
                     p.lon = _float(text)
                 elif name == "AltitudeMeters":
-                    p.elevation_m = _float(text)
+                    p.elevation_m = normalize_elevation(text)
                 elif name == "DistanceMeters":
                     p.distance_m = _float(text)
                 elif name in {"Cadence", "RunCadence"}:
@@ -219,7 +229,7 @@ class FitTrackPointsParser(TrackPointsFileParser):
             elev = row.get("enhanced_altitude", row.get("altitude"))
             points.append(ParsedTrackPoint(
                 timestamp=ts if isinstance(ts, datetime) else None,
-                lat=_float(lat), lon=_float(lon), elevation_m=_float(elev),
+                lat=_float(lat), lon=_float(lon), elevation_m=normalize_elevation(elev),
                 distance_m=_float(row.get("distance")), heart_rate_bpm=_int(row.get("heart_rate")),
                 cadence_spm=normalize_cadence(_float(row.get("cadence"))), speed_mps=_float(speed),
             ))

@@ -11,7 +11,7 @@ export type StatRow = Record<string, string | number | null>;
 export type TotalRow = { bucket: string; run_count: number; distance_m: number; moving_time_s: number; elevation_gain_m: number };
 export type PersonalBest = { distance_m: number; duration_s: number; pace_s_per_km: number; activity_id: number; activity_title: string; local_date: string };
 export type RouteResponse = { simplified_points_json: [number, number, number | null][]; original_point_count: number; simplified_point_count: number; simplification_tolerance_m?: number | null };
-export type StreamResponse = { streams: Record<string, [number, number][]> };
+export type StreamResponse = { x_domain_m: [number, number]; streams: Record<string, [number, number | null][]> };
 export type Split = { id: number; split_index: number; duration_s: number; avg_pace_s_per_km?: number | null; avg_heart_rate_bpm?: number | null };
 export type BestEffort = { distance_m: number; duration_s: number; pace_s_per_km: number };
 
