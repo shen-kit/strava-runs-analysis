@@ -1,0 +1,9 @@
+data/
+backend/data/
+backend/test_*.db
+backend/tmp_imports/
+backend/.pytest_cache/
+backend/app/**/__pycache__/
+frontend/.next/
+frontend/node_modules/
+.env
