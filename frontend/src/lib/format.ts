@@ -9,7 +9,7 @@ export function formatDuration(s?: number | null) {
 }
 export function formatPace(s?: number | null) {
   if (s == null || !Number.isFinite(s)) return "—";
-  const m = Math.floor(s / 60); const r = Math.round(s % 60);
+  const sec = Math.round(s); const m = Math.floor(sec / 60); const r = sec % 60;
   return `${m}:${String(r).padStart(2,"0")} /km`;
 }
 export function formatElevation(m?: number | null) { return m == null ? "—" : `${Math.round(m)} m`; }
