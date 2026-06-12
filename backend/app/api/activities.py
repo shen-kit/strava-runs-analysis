@@ -27,11 +27,31 @@ def activity_summary(a: Activity) -> dict:
 
 
 @router.get("")
-def list_activities(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0), year: int | None = None, session: Session = Depends(get_session)):
+def list_activities(
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    year: int | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    sort: str = Query("date", pattern="^(date|distance|time|pace)$"),
+    direction: str = Query("desc", pattern="^(asc|desc)$"),
+    session: Session = Depends(get_session),
+):
     q = select(Activity)
     if year: q = q.where(Activity.local_date >= f"{year}-01-01", Activity.local_date <= f"{year}-12-31")
-    q = q.order_by(Activity.start_time_utc.desc()).offset(offset).limit(limit)
-    return [activity_summary(a) for a in session.exec(q).all()]
+    if date_from: q = q.where(Activity.local_date >= date_from)
+    if date_to: q = q.where(Activity.local_date <= date_to)
+    rows = session.exec(q).all()
+    def dist(a: Activity): return a.source_distance_m if a.source_distance_m is not None else (a.computed_distance_m or 0)
+    def dur(a: Activity): return a.moving_time_s if a.moving_time_s is not None else (a.elapsed_time_s or 0)
+    def sort_key(a: Activity):
+        if sort == "distance": return dist(a)
+        if sort == "time": return dur(a)
+        if sort == "pace": return a.avg_pace_s_per_km if a.avg_pace_s_per_km is not None else float("inf")
+        dt = a.start_time_utc or a.start_time_local
+        return dt.timestamp() if dt else datetime.combine(a.local_date, datetime.min.time()).timestamp()
+    rows = sorted(rows, key=sort_key, reverse=direction == "desc")
+    return [activity_summary(a) for a in rows[offset:offset+limit]]
 
 
 @router.get("/{activity_id}")

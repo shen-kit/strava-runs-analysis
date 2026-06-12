@@ -154,6 +154,8 @@ select option { background: var(--surface); color: var(--foreground); }
 .table tbody tr:last-child th, .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td, .table tbody tr:hover th { background: var(--surface-muted); }
 .table a { font-weight: 650; }
+.table-sort { display: inline-flex; align-items: center; gap: 0.2rem; border: 0; background: transparent; color: inherit; font: inherit; font-weight: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.table-sort:hover { color: var(--foreground); text-decoration: underline; }
 .actions-cell { position: relative; width: 1%; text-align: right !important; }
 .actions-menu { position: static; display: inline-flex; justify-content: flex-end; }
 .actions-trigger { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border: 0; border-radius: 999px; background: transparent; color: var(--muted-strong); font-size: 1.35rem; font-weight: 800; line-height: 1; cursor: pointer; }
