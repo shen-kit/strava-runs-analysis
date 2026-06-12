@@ -104,7 +104,7 @@ def get_route_overlay(activity_id: int, metric: str = Query("pace", pattern="^(p
         markers.append({"type":"start","coordinates":[gps[0].lon, gps[0].lat]})
         markers.append({"type":"finish","coordinates":[gps[-1].lon, gps[-1].lat]})
         for a, b in zip(gps, gps[1:]):
-            if a.elapsed_time_s is not None and b.elapsed_time_s is not None and b.elapsed_time_s - a.elapsed_time_s > 60:
+            if a.elapsed_time_s is not None and b.elapsed_time_s is not None and b.elapsed_time_s - a.elapsed_time_s > 15:
                 markers.append({"type":"pause","coordinates":[b.lon, b.lat], "gap_s": b.elapsed_time_s - a.elapsed_time_s})
 
     stream_types = {"pace":"pace", "heart_rate":"heart_rate", "cadence":"cadence", "gradient":"elevation"}
