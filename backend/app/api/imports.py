@@ -67,6 +67,13 @@ async def upload_activity_files(
     return {"id": job.id, "status": job.status}
 
 
+@router.get("")
+def list_imports(limit: int = 10, session: Session = Depends(get_session)):
+    limit = max(1, min(limit, 50))
+    rows = session.exec(select(ImportJob).order_by(ImportJob.id.desc()).limit(limit)).all()
+    return [{k: getattr(job,k) for k in ["id","status","run_activities_seen","processed_count","new_count","skipped_count","reprocessed_count","failed_count","skipped_non_run_activities_count","error_message","created_at","started_at","completed_at"]} for job in rows]
+
+
 @router.get("/{import_job_id}")
 def get_import(import_job_id: int, session: Session = Depends(get_session)):
     job = session.get(ImportJob, import_job_id)
