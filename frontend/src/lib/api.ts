@@ -54,6 +54,7 @@ export const api = {
   activities: (params = "limit=50") => request<Activity[]>(`/activities?${params}`),
   activity: (id: number) => request<Activity>(`/activities/${id}`),
   deleteActivity: (id: number) => request<{status: string; activity_id: number}>(`/activities/${id}`, { method: "DELETE" }),
+  reprocessActivity: (id: number) => request<Activity>(`/activities/${id}/reprocess`, { method: "POST" }),
   route: (id: number) => request<RouteResponse>(`/activities/${id}/route`),
   routeOverlay: (id: number, metric: RouteOverlayMetric) => request<RouteOverlayResponse>(`/activities/${id}/route-overlay?metric=${metric}`),
   splits: (id: number) => request<Split[]>(`/activities/${id}/splits`),

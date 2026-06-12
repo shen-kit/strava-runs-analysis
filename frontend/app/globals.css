@@ -158,7 +158,7 @@ select option { background: var(--surface); color: var(--foreground); }
 .actions-menu { position: static; display: inline-flex; justify-content: flex-end; }
 .actions-trigger { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border: 0; border-radius: 999px; background: transparent; color: var(--muted-strong); font-size: 1.35rem; font-weight: 800; line-height: 1; cursor: pointer; }
 .actions-trigger:hover { background: var(--surface-muted); color: var(--foreground); }
-.actions-popover { position: absolute; right: 0.5rem; top: calc(100% - 0.25rem); z-index: 30; min-width: 10rem; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-elevated); box-shadow: var(--shadow-card); }
+.actions-popover { position: absolute; right: 0.5rem; top: calc(100% - 0.25rem); z-index: 30; min-width: 12rem; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-elevated); box-shadow: var(--shadow-card); }
 .actions-item { display: flex; width: 100%; justify-content: flex-start; border: 0; border-radius: 0; box-shadow: none; padding: 0.65rem 0.8rem; text-align: left; }
 .actions-item:hover { background: var(--surface-muted); }
 .actions-danger { color: var(--danger); }

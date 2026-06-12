@@ -1,8 +1,11 @@
 from __future__ import annotations
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 from ..db import get_session
 from ..models import Activity, ActivityRoute, ActivitySplit, BestEffort, TrackPoint
+from ..importer.derive import clean_points, computed_distance_m, generate_best_efforts, generate_splits, mean, simplify_route
+from ..importer.parsers import ParsedTrackPoint
 from .stream_utils import build_streams, downsample_streams, with_cumulative_distance
 
 router = APIRouter(prefix="/activities", tags=["activities"])
@@ -36,15 +39,84 @@ def get_activity(activity_id: int, session: Session = Depends(get_session)):
     return activity_summary(activity_or_404(session, activity_id))
 
 
-@router.delete("/{activity_id}")
-def delete_activity(activity_id: int, session: Session = Depends(get_session)):
-    activity = activity_or_404(session, activity_id)
+def _delete_derived(session: Session, activity_id: int) -> None:
+    for cls in (ActivitySplit, BestEffort, ActivityRoute):
+        for obj in session.exec(select(cls).where(cls.activity_id == activity_id)).all():
+            session.delete(obj)
+    session.flush()
+
+
+def _delete_activity_rows(session: Session, activity_id: int) -> None:
     for cls in (TrackPoint, ActivitySplit, BestEffort, ActivityRoute):
         for obj in session.exec(select(cls).where(cls.activity_id == activity_id)).all():
             session.delete(obj)
+
+
+def _moving_time_s(cleaned) -> float | None:
+    if len(cleaned) < 2: return None
+    total = 0.0
+    for a, b in zip(cleaned, cleaned[1:]):
+        if b.distance_m > a.distance_m:
+            total += max(0.0, b.elapsed_time_s - a.elapsed_time_s)
+    return total or None
+
+
+def _elevation_gain_m(cleaned) -> float | None:
+    gain = 0.0; found = False
+    for a, b in zip(cleaned, cleaned[1:]):
+        if a.elevation_m is None or b.elevation_m is None: continue
+        found = True; gain += max(0.0, b.elevation_m - a.elevation_m)
+    return gain if found else None
+
+
+@router.delete("/{activity_id}")
+def delete_activity(activity_id: int, session: Session = Depends(get_session)):
+    activity = activity_or_404(session, activity_id)
+    _delete_activity_rows(session, activity_id)
     session.delete(activity)
     session.commit()
     return {"status": "deleted", "activity_id": activity_id}
+
+
+@router.post("/{activity_id}/reprocess")
+def reprocess_activity(activity_id: int, session: Session = Depends(get_session)):
+    activity = activity_or_404(session, activity_id)
+    rows = session.exec(select(TrackPoint).where(TrackPoint.activity_id == activity_id).order_by(TrackPoint.point_index)).all()
+    if len(rows) < 2:
+        raise HTTPException(status_code=400, detail="Activity has insufficient track points to reprocess")
+    parsed = [ParsedTrackPoint(timestamp=p.timestamp, lat=p.lat, lon=p.lon, elevation_m=p.elevation_m, distance_m=p.distance_m, heart_rate_bpm=p.heart_rate_bpm, cadence_spm=p.cadence_spm, speed_mps=p.speed_mps) for p in rows]
+    cleaned, _, _ = clean_points(parsed)
+    if len(cleaned) < 2:
+        raise HTTPException(status_code=400, detail="Activity has insufficient clean track points to reprocess")
+    comp = computed_distance_m(cleaned)
+    moving = _moving_time_s(cleaned)
+    elapsed = cleaned[-1].elapsed_time_s
+    splits, _ = generate_splits(cleaned)
+    efforts, _ = generate_best_efforts(cleaned)
+    route = simplify_route(cleaned)
+    _delete_derived(session, activity_id)
+    activity.computed_distance_m = comp
+    has_imported_summary = activity.source_activity_id is not None
+    if not has_imported_summary:
+        activity.moving_time_s = moving
+        activity.elapsed_time_s = elapsed
+        activity.elevation_gain_m = _elevation_gain_m(cleaned)
+        distance_for_pace = activity.source_distance_m if activity.source_distance_m is not None else comp
+        activity.avg_pace_s_per_km = moving / (distance_for_pace / 1000) if moving and distance_for_pace else None
+        activity.avg_speed_mps = comp / moving if comp and moving else None
+        speeds = [p.speed_mps for p in cleaned if p.speed_mps is not None]
+        activity.max_speed_mps = max(speeds) if speeds else activity.max_speed_mps
+        activity.avg_heart_rate_bpm = mean(p.heart_rate_bpm for p in cleaned)
+        hrs = [p.heart_rate_bpm for p in cleaned if p.heart_rate_bpm is not None]
+        activity.max_heart_rate_bpm = max(hrs) if hrs else None
+        activity.avg_cadence_spm = mean(p.cadence_spm for p in cleaned)
+    activity.updated_at = datetime.now(timezone.utc)
+    session.add(activity); session.flush()
+    for sp in splits: session.add(ActivitySplit(activity_id=activity_id, **sp))
+    for ef in efforts: session.add(BestEffort(activity_id=activity_id, **ef))
+    if route: session.add(ActivityRoute(activity_id=activity_id, **route))
+    session.commit(); session.refresh(activity)
+    return activity_summary(activity)
 
 
 @router.get("/{activity_id}/route")
