@@ -11,7 +11,16 @@ export type ImportJob = { status: string; run_activities_seen: number; processed
 export type Summary = { total_runs: number; total_distance_m: number; total_moving_time_s: number; total_elevation_gain_m: number; average_pace_s_per_km?: number | null; longest_run_distance_m: number; latest_activity_date?: string | null; current_month_distance_m: number; current_year_distance_m: number };
 export type StatRow = Record<string, string | number | null>;
 export type TotalRow = { bucket: string; run_count: number; days_run?: number; distance_m: number; moving_time_s: number; elevation_gain_m: number; rolling_4_week_avg_distance_m?: number | null };
-export type PersonalBest = { distance_m: number; duration_s: number; pace_s_per_km: number; activity_id: number; activity_title: string; local_date: string };
+export type DashboardSectionKey = "summary" | "weeklyVolume" | "trainingConsistency" | "personalBests" | "bestEffortTrend" | "longRun" | "paceTrend" | "elevationTrend" | "distanceDistribution" | "recentRuns";
+export type AppSettings = {
+  dashboard: { visibleSections: Record<DashboardSectionKey, boolean>; sectionOrder: DashboardSectionKey[]; defaultTimeRange: string; defaultBucket: "week" | "month" | "year" };
+  maps: { defaultOverlay: "none" | RouteOverlayMetric; defaultMapType: "satellite" | "road" };
+  charts: { paceSmoothingWindowM: number; elevationSmoothingWindowM: number; gradientSmoothingWindowM: number };
+  trainingZones: { heartRate: Zone[]; pace: Zone[] };
+};
+export type Zone = { label: string; min: number; max: number };
+export type BestEffortDistanceSetting = { id?: number; label: string; distance_m: number; enabled: boolean; sort_order: number };
+export type PersonalBest = { distance_m: number; label?: string; duration_s: number; pace_s_per_km: number; activity_id: number; activity_title: string; local_date: string };
 export type RouteResponse = { simplified_points_json: [number, number, number | null][]; original_point_count: number; simplified_point_count: number; simplification_tolerance_m?: number | null };
 export type StreamResponse = { x_domain_m: [number, number]; streams: Record<string, [number, number | null][]> };
 export type RouteOverlayMetric = "pace" | "heart_rate" | "gradient" | "cadence";
@@ -26,6 +35,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const api = {
+  settings: () => request<AppSettings>("/settings"),
+  updateSettings: (settings: AppSettings) => request<AppSettings>("/settings", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(settings) }),
+  bestEffortDistances: () => request<BestEffortDistanceSetting[]>("/settings/best-effort-distances"),
+  updateBestEffortDistances: (distances: BestEffortDistanceSetting[]) => request<BestEffortDistanceSetting[]>("/settings/best-effort-distances", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ distances }) }),
+  recalculateBestEfforts: () => request<{status: string; efforts: number; distances: number}>("/settings/best-effort-distances/recalculate", { method: "POST" }),
   summary: () => request<Summary>("/stats/summary"),
   totals: (bucket = "week") => request<TotalRow[]>(`/stats/totals?bucket=${bucket}`),
   weeklyVolume: () => request<TotalRow[]>("/stats/weekly-volume"),

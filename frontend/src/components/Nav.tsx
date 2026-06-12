@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "@/src/components/ThemeToggle";
+import { useSettings } from "@/src/components/SettingsContext";
 
 const links = [
   { href: "/", label: "Dashboard" },
@@ -12,6 +13,7 @@ const links = [
 
 export function Nav() {
   const pathname = usePathname();
+  const settings = useSettings();
   return (
     <nav className="app-nav">
       <div className="nav-inner">
@@ -24,7 +26,7 @@ export function Nav() {
             })}
           </div>
         </div>
-        <ThemeToggle />
+        <div className="toolbar"><button className="btn btn-sm" onClick={settings.open}>Settings</button><ThemeToggle /></div>
       </div>
     </nav>
   );

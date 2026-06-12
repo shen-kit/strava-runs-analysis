@@ -123,14 +123,15 @@ def has_long_gap(points: list[CleanPoint], start_d: float, end_d: float) -> bool
     return False
 
 
-def generate_best_efforts(points: list[CleanPoint]) -> tuple[list[dict], list[str]]:
+def generate_best_efforts(points: list[CleanPoint], distances_m: list[float] | None = None) -> tuple[list[dict], list[str]]:
     warnings=[]; efforts=[]
+    targets = sorted(float(d) for d in (distances_m or BEST_EFFORT_DISTANCES_M) if d > 0)
     total = computed_distance_m(points)
-    if total is None or total < min(BEST_EFFORT_DISTANCES_M):
+    if not targets or total is None or total < min(targets):
         return efforts, ["not_enough_distance_for_best_efforts"]
     start_base = points[0].distance_m
     max_d = points[-1].distance_m
-    for target in BEST_EFFORT_DISTANCES_M:
+    for target in targets:
         if total + 0.1 < target: continue
         best = None
         for sp in points:

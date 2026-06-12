@@ -5,9 +5,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 from ..db import get_session
 from ..models import Activity, BestEffort
+from .settings import get_enabled_best_effort_distances
 
 router = APIRouter(prefix="/stats", tags=["stats"])
-PB_DISTANCES = [400.0, 800.0, 1000.0, 1609.344, 5000.0, 10000.0, 15000.0, 21097.5, 42195.0]
 
 
 def bucket_key(d: date, bucket: str) -> str:
@@ -91,18 +91,20 @@ def elevation(bucket: str = Query("week", pattern="^(week|month|year)$"), sessio
 
 @router.get("/personal-bests")
 def personal_bests(session: Session = Depends(get_session)):
+    distance_rows = get_enabled_best_effort_distances(session)
+    labels = {row.distance_m: row.label for row in distance_rows}
+    targets = set(labels)
     efforts = session.exec(select(BestEffort, Activity).join(Activity, Activity.id == BestEffort.activity_id).order_by(BestEffort.distance_m, BestEffort.duration_s)).all()
     best = {}
-    targets = set(PB_DISTANCES)
     for effort, act in efforts:
         if effort.distance_m in targets and effort.distance_m not in best:
-            best[effort.distance_m] = {"distance_m":effort.distance_m,"duration_s":effort.duration_s,"pace_s_per_km":effort.pace_s_per_km,"activity_id":act.id,"activity_title":act.title,"local_date":act.local_date}
-    return [best[k] for k in PB_DISTANCES if k in best]
+            best[effort.distance_m] = {"distance_m":effort.distance_m,"label":labels[effort.distance_m],"duration_s":effort.duration_s,"pace_s_per_km":effort.pace_s_per_km,"activity_id":act.id,"activity_title":act.title,"local_date":act.local_date}
+    return [best[row.distance_m] for row in distance_rows if row.distance_m in best]
 
 
 @router.get("/best-effort-trend")
-def best_effort_trend(distances: str = "1000,5000,10000", session: Session = Depends(get_session)):
-    targets = {float(x) for x in distances.split(",") if x.strip()}
+def best_effort_trend(distances: str = "", session: Session = Depends(get_session)):
+    targets = {float(x) for x in distances.split(",") if x.strip()} if distances else {row.distance_m for row in get_enabled_best_effort_distances(session)}
     rows = session.exec(select(BestEffort, Activity).join(Activity, Activity.id == BestEffort.activity_id).order_by(Activity.local_date)).all()
     out=[]
     for effort, act in rows:
@@ -112,7 +114,7 @@ def best_effort_trend(distances: str = "1000,5000,10000", session: Session = Dep
 
 
 @router.get("/long-run-progression")
-def long_run_progression(bucket: str = Query("week", pattern="^(week|month)$"), session: Session = Depends(get_session)):
+def long_run_progression(bucket: str = Query("week", pattern="^(week|month|year)$"), session: Session = Depends(get_session)):
     groups = defaultdict(lambda: {"bucket":None,"longest_run_distance_m":0.0,"activity_id":None,"activity_title":None,"local_date":None})
     for a in get_activities(session):
         k=bucket_key(a.local_date,bucket); d=a.source_distance_m or 0; g=groups[k]; g["bucket"]=k

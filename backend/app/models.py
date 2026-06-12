@@ -94,6 +94,22 @@ class ActivitySplit(SQLModel, table=True):
     avg_cadence_spm: Optional[float] = None
 
 
+class AppSetting(SQLModel, table=True):
+    __tablename__ = "app_settings"
+    key: str = Field(primary_key=True)
+    value_json: dict = Field(sa_column=Column(JSON))
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class BestEffortDistance(SQLModel, table=True):
+    __tablename__ = "best_effort_distances"
+    id: Optional[int] = Field(default=None, primary_key=True)
+    label: str
+    distance_m: float = Field(index=True)
+    enabled: bool = True
+    sort_order: int = 0
+
+
 class BestEffort(SQLModel, table=True):
     __tablename__ = "best_efforts"
     __table_args__ = (Index("ix_best_efforts_distance_duration", "distance_m", "duration_s"),)

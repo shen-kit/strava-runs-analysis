@@ -5,14 +5,18 @@ import { useQuery } from "@tanstack/react-query";
 import maplibregl, { LngLatBounds, Map, type ExpressionSpecification, type Popup } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { api, type RouteOverlayMetric } from "@/src/lib/api";
+import { useSettings } from "@/src/components/SettingsContext";
 import { formatPace } from "@/src/lib/format";
 
 type RoutePoint = [number, number, number | null];
 type ColourMode = "none" | RouteOverlayMetric;
+type MapType = "satellite" | "road";
 type ColourStop = { value: number; colour: string };
 
-const tileUrl = process.env.NEXT_PUBLIC_MAP_TILE_URL;
-const attribution = process.env.NEXT_PUBLIC_MAP_ATTRIBUTION ?? "";
+const satelliteTileUrl = process.env.NEXT_PUBLIC_MAP_TILE_URL;
+const satelliteAttribution = process.env.NEXT_PUBLIC_MAP_ATTRIBUTION ?? "";
+const roadTileUrl = process.env.NEXT_PUBLIC_MAP_ROAD_TILE_URL;
+const roadAttribution = process.env.NEXT_PUBLIC_MAP_ROAD_ATTRIBUTION ?? "";
 const metricLabels: Record<RouteOverlayMetric, string> = { pace: "Pace", heart_rate: "Heart rate", gradient: "Gradient", cadence: "Cadence" };
 
 function validPoints(points: RoutePoint[]) {
@@ -53,6 +57,14 @@ function colourExpression(metric: RouteOverlayMetric, min: number | null | undef
   return expression as ExpressionSpecification;
 }
 
+function mapTileConfig(mapType: MapType) {
+  const roadAvailable = !!roadTileUrl;
+  const url = mapType === "road" && roadAvailable ? roadTileUrl : satelliteTileUrl;
+  const attr = mapType === "road" && roadAvailable ? roadAttribution : satelliteAttribution;
+  const id = mapType === "road" && roadAvailable ? "road" : "satellite";
+  return { url, attr, id };
+}
+
 function legendGradient(metric: RouteOverlayMetric, min: number, max: number): string {
   if (min === max) return colourStops(metric, min, max)[0].colour;
   const stops = colourStops(metric, min, max);
@@ -64,10 +76,14 @@ function legendGradient(metric: RouteOverlayMetric, min: number, max: number): s
 }
 
 export function RouteMap({ activityId, points }: { activityId: number; points: RoutePoint[] }) {
+  const { settings } = useSettings();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const tooltipRef = useRef<Popup | null>(null);
-  const [mode, setMode] = useState<ColourMode>("none");
+  const [mode, setMode] = useState<ColourMode>(settings.maps.defaultOverlay);
+  const [mapType, setMapType] = useState<MapType>(settings.maps.defaultMapType);
+  useEffect(() => { setMode(settings.maps.defaultOverlay); }, [settings.maps.defaultOverlay]);
+  useEffect(() => { setMapType(settings.maps.defaultMapType); }, [settings.maps.defaultMapType]);
   const route = useMemo(() => validPoints(points ?? []), [points]);
   const queryMetric: RouteOverlayMetric = mode === "none" ? "pace" : mode;
   const overlay = useQuery({
@@ -90,11 +106,12 @@ export function RouteMap({ activityId, points }: { activityId: number; points: R
   }, [mode, overlay.data]);
 
   useEffect(() => {
-    if (!containerRef.current || !tileUrl || route.length === 0) return;
+    const tile = mapTileConfig(mapType);
+    if (!containerRef.current || !tile.url || route.length === 0) return;
     const coordinates = route.map(([lat, lon, ele]) => ele == null ? [lon, lat] : [lon, lat, ele]);
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: { version: 8, sources: { satellite: { type: "raster", tiles: [tileUrl], tileSize: 256, attribution } }, layers: [{ id: "satellite", type: "raster", source: "satellite" }] },
+      style: { version: 8, sources: { [tile.id]: { type: "raster", tiles: [tile.url], tileSize: 256, attribution: tile.attr } }, layers: [{ id: tile.id, type: "raster", source: tile.id }] },
       center: [coordinates[0][0], coordinates[0][1]],
       zoom: 14,
     });
@@ -151,21 +168,27 @@ export function RouteMap({ activityId, points }: { activityId: number; points: R
       mapRef.current?.remove();
       mapRef.current = null;
     };
-  }, [route, overlay.data, mode]);
+  }, [route, overlay.data, mode, mapType]);
 
-  if (!tileUrl) return <div className="empty-state min-h-80">Map tile URL not configured.</div>;
+  if (!mapTileConfig(mapType).url) return <div className="empty-state min-h-80">Map tile URL not configured.</div>;
   if (!route.length) return <div className="empty-state min-h-80">No route data.</div>;
 
   return (
     <div className="map-shell">
       <div ref={containerRef} className="map-canvas" />
-      <select value={mode} onChange={(e) => setMode(e.target.value as ColourMode)} className="select map-overlay map-select text-sm">
-        <option value="none">Default</option>
-        <option value="pace">Pace</option>
-        <option value="heart_rate" disabled={overlay.data ? !overlay.data.has_heart_rate : false}>Heart rate</option>
-        <option value="gradient">Hill gradient</option>
-        <option value="cadence" disabled={overlay.data ? !overlay.data.has_cadence : false}>Cadence</option>
-      </select>
+      <div className="map-select grid gap-2">
+        <select value={mode} onChange={(e) => setMode(e.target.value as ColourMode)} className="select map-overlay text-sm">
+          <option value="none">Default</option>
+          <option value="pace">Pace</option>
+          <option value="heart_rate" disabled={overlay.data ? !overlay.data.has_heart_rate : false}>Heart rate</option>
+          <option value="gradient">Hill gradient</option>
+          <option value="cadence" disabled={overlay.data ? !overlay.data.has_cadence : false}>Cadence</option>
+        </select>
+        <select value={mapType} onChange={(e) => setMapType(e.target.value as MapType)} className="select map-overlay text-sm">
+          <option value="satellite">Satellite</option>
+          <option value="road">Road</option>
+        </select>
+      </div>
       {legend && (
         <div className="map-legend">
           <div className="mb-1 font-semibold">{legend.title}</div>

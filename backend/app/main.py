@@ -1,7 +1,7 @@
 import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .api import activities, imports, stats
+from .api import activities, imports, settings as settings_api, stats
 from .config import get_settings
 from .db import init_db
 
@@ -23,3 +23,4 @@ def health():
 app.include_router(imports.router)
 app.include_router(activities.router)
 app.include_router(stats.router)
+app.include_router(settings_api.router)
