@@ -173,8 +173,7 @@ select option { background: var(--surface); color: var(--foreground); }
 .map-canvas { height: 30rem; width: 100%; }
 .map-overlay, .map-legend, .map-key { border: 1px solid rgb(255 255 255 / 0.16); border-radius: 0.85rem; background: color-mix(in srgb, var(--surface) 88%, transparent); color: var(--foreground); box-shadow: 0 12px 30px rgb(15 23 42 / 0.18); backdrop-filter: blur(12px); }
 .map-select { position: absolute; right: 0.75rem; top: 0.75rem; max-width: calc(100% - 1.5rem); }
-.map-legend { position: absolute; bottom: 0.75rem; right: 0.75rem; width: 12rem; padding: 0.65rem; font-size: 0.72rem; }
-.map-key { position: absolute; bottom: 0.75rem; left: 0.75rem; padding: 0.45rem 0.6rem; font-size: 0.75rem; }
+.map-legend { position: absolute; bottom: 0.75rem; left: 0.75rem; width: 12rem; padding: 0.65rem; font-size: 0.72rem; }
 .route-tooltip .maplibregl-popup-content { background: rgb(15 23 42 / 0.92); color: white; border: 1px solid rgb(255 255 255 / 0.14); border-radius: 9999px; padding: 0.3rem 0.55rem; font-size: 0.75rem; line-height: 1rem; box-shadow: 0 8px 20px rgb(15 23 42 / 0.35); }
 .route-tooltip .maplibregl-popup-tip { display: none; }
 
@@ -217,7 +216,6 @@ select option { background: var(--surface); color: var(--foreground); }
   .toolbar { width: 100%; }
   .btn { flex: 1 1 auto; }
   .map-canvas { height: 24rem; }
-  .map-key { display: none; }
   .settings-grid-2 { grid-template-columns: 1fr; }
   .settings-row { grid-template-columns: 1fr; align-items: stretch; }
 }

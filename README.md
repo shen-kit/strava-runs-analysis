@@ -69,18 +69,22 @@ IMPORT_TMP_DIR=/data/imports_tmp
 CORS_ALLOWED_ORIGINS=http://localhost:3000
 DEFAULT_TIMEZONE=Australia/Melbourne
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-NEXT_PUBLIC_MAP_TILE_URL=https://example.com/satellite/{z}/{x}/{y}.jpg
-NEXT_PUBLIC_MAP_ATTRIBUTION=Satellite imagery attribution
+NEXT_PUBLIC_MAP_TILE_URL_SATELLITE=https://api.maptiler.com/maps/satellite/256/{z}/{x}/{y}.jpg?key=YOUR_KEY
+NEXT_PUBLIC_MAP_TILE_URL_STREET=https://api.maptiler.com/maps/streets-v4/256/{z}/{x}/{y}.jpg?key=YOUR_KEY
+NEXT_PUBLIC_MAP_TILE_SIZE=256
+NEXT_PUBLIC_MAP_ATTRIBUTION=© MapTiler © OpenStreetMap contributors
 ```
 
 ### Map tiles / Mapbox setup
 
-The map uses MapLibre GL with a raster tile URL template. It does not use Leaflet and does not manually request tiles by latitude/longitude.
+The map uses MapLibre GL with raster tile URL templates. It does not use Leaflet and does not manually request tiles by latitude/longitude.
 
-You need a tile URL in `{z}/{x}/{y}` format. For Mapbox raster satellite tiles, this usually looks like:
+Set tile URLs in `{z}/{x}/{y}` format for each style you want to use:
 
 ```env
-NEXT_PUBLIC_MAP_TILE_URL=https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=YOUR_MAPBOX_TOKEN
+NEXT_PUBLIC_MAP_TILE_URL_SATELLITE=https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=YOUR_MAPBOX_TOKEN
+NEXT_PUBLIC_MAP_TILE_URL_STREET=https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=YOUR_MAPBOX_TOKEN
+NEXT_PUBLIC_MAP_TILE_SIZE=256
 NEXT_PUBLIC_MAP_ATTRIBUTION=© Mapbox © OpenStreetMap
 ```
 
@@ -88,8 +92,8 @@ Notes:
 
 - Replace `YOUR_MAPBOX_TOKEN` with your Mapbox public access token.
 - Check your provider’s attribution requirements.
-- Some providers use `256` or `512` pixel tiles. The app currently uses `tileSize: 256`.
-- The placeholder URL in `.env.example` will not load real imagery.
+- Some providers use `256` or `256` pixel tiles. The app defaults to `tileSize: 256`.
+- If a style URL is unset, the map shows a message naming the required environment variable instead of falling back to a placeholder URL.
 
 ## Importing Strava data
 
@@ -201,7 +205,9 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
 If testing maps locally, also provide:
 
 ```bash
-NEXT_PUBLIC_MAP_TILE_URL='https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=YOUR_MAPBOX_TOKEN'
+NEXT_PUBLIC_MAP_TILE_URL_SATELLITE='https://api.mapbox.com/v4/mapbox.satellite/{z}/{x}/{y}@2x.jpg90?access_token=YOUR_MAPBOX_TOKEN'
+NEXT_PUBLIC_MAP_TILE_URL_STREET='https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=YOUR_MAPBOX_TOKEN'
+NEXT_PUBLIC_MAP_TILE_SIZE=256
 NEXT_PUBLIC_MAP_ATTRIBUTION='© Mapbox © OpenStreetMap'
 ```
 

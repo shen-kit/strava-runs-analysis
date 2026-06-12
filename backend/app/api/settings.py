@@ -58,7 +58,7 @@ def settings_with_defaults(value: dict[str, Any] | None) -> dict[str, Any]:
     if overlay not in {"none", "pace", "heart_rate", "gradient", "cadence"}:
         settings["maps"]["defaultOverlay"] = "none"
     map_type = settings.get("maps", {}).get("defaultMapType")
-    if map_type not in {"satellite", "road"}:
+    if map_type not in {"satellite", "street"}:
         settings["maps"]["defaultMapType"] = "satellite"
     return settings
 

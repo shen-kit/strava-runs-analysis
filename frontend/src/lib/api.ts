@@ -14,7 +14,7 @@ export type TotalRow = { bucket: string; run_count: number; days_run?: number; d
 export type DashboardSectionKey = "summary" | "weeklyVolume" | "trainingConsistency" | "personalBests" | "bestEffortTrend" | "longRun" | "paceTrend" | "elevationTrend" | "distanceDistribution" | "recentRuns";
 export type AppSettings = {
   dashboard: { visibleSections: Record<DashboardSectionKey, boolean>; sectionOrder: DashboardSectionKey[]; defaultTimeRange: string; defaultBucket: "week" | "month" | "year" };
-  maps: { defaultOverlay: "none" | RouteOverlayMetric; defaultMapType: "satellite" | "road" };
+  maps: { defaultOverlay: "none" | RouteOverlayMetric; defaultMapType: "satellite" | "street" };
   charts: { paceSmoothingWindowM: number; elevationSmoothingWindowM: number; gradientSmoothingWindowM: number };
   trainingZones: { heartRate: Zone[]; pace: Zone[] };
 };
