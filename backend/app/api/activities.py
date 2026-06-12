@@ -9,6 +9,7 @@ from ..importer.parsers import ParsedTrackPoint
 from .stream_utils import build_streams, downsample_streams, with_cumulative_distance
 
 router = APIRouter(prefix="/activities", tags=["activities"])
+PAUSE_GAP_S = 15
 
 
 def activity_or_404(session: Session, activity_id: int) -> Activity:
@@ -168,7 +169,9 @@ def get_streams(activity_id: int, types: str = "pace,heart_rate,cadence,elevatio
     rows = session.exec(select(TrackPoint).where(TrackPoint.activity_id == activity_id).order_by(TrackPoint.point_index)).all()
     full_distance_m = activity.source_distance_m or activity.computed_distance_m or max([p.distance_m or 0 for p in rows], default=0)
     streams = build_streams(rows, wanted, full_distance_m)
-    return {"activity_id":activity_id,"x_axis":"distance_m","x_domain_m":[0, full_distance_m],"streams":downsample_streams(streams)}
+    points = with_cumulative_distance(rows)
+    pauses = [{"start_distance_m": a.distance_m, "end_distance_m": b.distance_m, "duration_s": b.elapsed_time_s - a.elapsed_time_s} for a, b in zip(points, points[1:]) if a.elapsed_time_s is not None and b.elapsed_time_s is not None and b.elapsed_time_s - a.elapsed_time_s > PAUSE_GAP_S and a.distance_m is not None and b.distance_m is not None]
+    return {"activity_id":activity_id,"x_axis":"distance_m","x_domain_m":[0, full_distance_m],"streams":downsample_streams(streams),"pauses":pauses}
 
 
 def _interp_stream(stream: list[list[float | None]], distance_m: float) -> float | None:
@@ -192,12 +195,14 @@ def get_route_overlay(activity_id: int, metric: str = Query("pace", pattern="^(p
     points = with_cumulative_distance(rows)
     gps = [p for p in points if p.lat is not None and p.lon is not None and p.distance_m is not None]
     markers = []
+    pause_features = []
     if gps:
         markers.append({"type":"start","coordinates":[gps[0].lon, gps[0].lat]})
         markers.append({"type":"finish","coordinates":[gps[-1].lon, gps[-1].lat]})
         for a, b in zip(gps, gps[1:]):
-            if a.elapsed_time_s is not None and b.elapsed_time_s is not None and b.elapsed_time_s - a.elapsed_time_s > 15:
+            if a.elapsed_time_s is not None and b.elapsed_time_s is not None and b.elapsed_time_s - a.elapsed_time_s > PAUSE_GAP_S:
                 markers.append({"type":"pause","coordinates":[b.lon, b.lat], "gap_s": b.elapsed_time_s - a.elapsed_time_s})
+                pause_features.append({"type":"Feature","properties":{"duration_s": b.elapsed_time_s - a.elapsed_time_s},"geometry":{"type":"LineString","coordinates":[[a.lon,a.lat],[b.lon,b.lat]]}})
 
     stream_types = {"pace":"pace", "heart_rate":"heart_rate", "cadence":"cadence", "gradient":"elevation"}
     streams = build_streams(rows, {stream_types[metric]}, full_distance_m)
@@ -218,7 +223,7 @@ def get_route_overlay(activity_id: int, metric: str = Query("pace", pattern="^(p
         features.append({"type":"Feature","properties":{"value":float(value)},"geometry":{"type":"LineString","coordinates":[[a.lon,a.lat],[b.lon,b.lat]]}})
     vals = [f["properties"]["value"] for f in features]
     units = {"pace":"s_per_km", "heart_rate":"bpm", "gradient":"percent", "cadence":"spm"}
-    return {"activity_id":activity_id,"metric":metric,"unit":units[metric],"min_value":min(vals) if vals else None,"max_value":max(vals) if vals else None,"has_heart_rate":any(p.heart_rate_bpm is not None for p in rows),"has_cadence":any(p.cadence_spm is not None for p in rows),"markers":markers,"geojson":{"type":"FeatureCollection","features":features}}
+    return {"activity_id":activity_id,"metric":metric,"unit":units[metric],"min_value":min(vals) if vals else None,"max_value":max(vals) if vals else None,"has_heart_rate":any(p.heart_rate_bpm is not None for p in rows),"has_cadence":any(p.cadence_spm is not None for p in rows),"markers":markers,"paused_geojson":{"type":"FeatureCollection","features":pause_features},"geojson":{"type":"FeatureCollection","features":features}}
 
 
 @router.get("/{activity_id}/track-points")

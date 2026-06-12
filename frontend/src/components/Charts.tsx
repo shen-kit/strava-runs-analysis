@@ -1,5 +1,5 @@
 "use client";
-import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { formatPace } from "@/src/lib/format";
 
 const C = { blue: "var(--chart-1)", green: "var(--chart-2)", elevation: "var(--chart-muted)" };
@@ -62,7 +62,7 @@ function mergeElevation(data: ChartRow[], elevationData?: ChartRow[]) {
   return rows;
 }
 
-export function StreamLine({ data, yKey, name, kind = "generic", noData, xDomainKm, elevationData }: { data: ChartRow[]; yKey: string; name: string; kind?: "pace" | "elevation" | "generic"; noData?: string; xDomainKm?: [number, number]; elevationData?: ChartRow[] }) {
+export function StreamLine({ data, yKey, name, kind = "generic", noData, xDomainKm, elevationData, pauses = [] }: { data: ChartRow[]; yKey: string; name: string; kind?: "pace" | "elevation" | "generic"; noData?: string; xDomainKm?: [number, number]; elevationData?: ChartRow[]; pauses?: { start_distance_m: number; end_distance_m: number; duration_s: number }[] }) {
   const hasPaceSlowerThan8 = kind === "pace" && data.some((d) => {
     const v = d[yKey];
     return typeof v === "number" && Number.isFinite(v) && v > 8;
@@ -90,5 +90,5 @@ export function StreamLine({ data, yKey, name, kind = "generic", noData, xDomain
     return num;
   };
   const Chart = hasElevationOverlay ? ComposedChart : LineChart;
-  return <div className="chart-wrap-sm"><ResponsiveContainer><Chart data={chartData}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="km" type="number" tickFormatter={distanceTick} label={{ value: "Distance (km)", position: "insideBottom", offset: -4 }} domain={xDomainKm ?? ["dataMin", "dataMax"]}/><YAxis yAxisId="left" tickFormatter={yTick} domain={domain} reversed={kind === "pace"}/>{hasElevationOverlay && <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${Math.round(v)}m`} domain={elevationDomain} width={42} stroke={C.elevation}/>}<Tooltip formatter={tooltipFormatter} labelFormatter={(v) => `Distance ${distanceTick(Number(v))}`}/>{hasElevationOverlay && <Area yAxisId="right" type="monotone" dataKey="elevationOverlay" name="Elevation" stroke={C.elevation} strokeOpacity={0.4} fill={C.elevation} fillOpacity={0.16} connectNulls={false} isAnimationActive={false}/>}<Line yAxisId="left" dot={false} connectNulls={hasElevationOverlay} type="monotone" dataKey={yKey} name={name} stroke={C.green} strokeWidth={2}/></Chart></ResponsiveContainer></div>;
+  return <div className="chart-wrap-sm"><ResponsiveContainer><Chart data={chartData}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="km" type="number" tickFormatter={distanceTick} label={{ value: "Distance (km)", position: "insideBottom", offset: -4 }} domain={xDomainKm ?? ["dataMin", "dataMax"]}/><YAxis yAxisId="left" tickFormatter={yTick} domain={domain} reversed={kind === "pace"}/>{hasElevationOverlay && <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${Math.round(v)}m`} domain={elevationDomain} width={42} stroke={C.elevation}/>}<Tooltip formatter={tooltipFormatter} labelFormatter={(v) => `Distance ${distanceTick(Number(v))}`}/>{pauses.map((p, i) => <ReferenceArea key={i} x1={p.start_distance_m / 1000} x2={p.end_distance_m / 1000} yAxisId="left" fill="var(--chart-muted)" fillOpacity={0.5} strokeOpacity={0} />)}{hasElevationOverlay && <Area yAxisId="right" type="monotone" dataKey="elevationOverlay" name="Elevation" stroke={C.elevation} strokeOpacity={0.4} fill={C.elevation} fillOpacity={0.16} connectNulls={false} isAnimationActive={false}/>}<Line yAxisId="left" dot={false} connectNulls={hasElevationOverlay} type="monotone" dataKey={yKey} name={name} stroke={C.green} strokeWidth={2}/></Chart></ResponsiveContainer></div>;
 }

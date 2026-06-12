@@ -133,8 +133,8 @@ export function RouteMap({ activityId, points }: { activityId: number; points: R
 
     map.on("load", () => {
       map.addSource("route", { type: "geojson", data: { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates } } });
-      map.addLayer({ id: "route-shadow", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#000", "line-width": 7, "line-opacity": 0.55 } });
-      map.addLayer({ id: "route-line", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#f97316", "line-width": 4, "line-opacity": 0.95 } });
+      map.addLayer({ id: "route-shadow", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#000", "line-width": 7, "line-opacity": mode === "none" ? 0.55 : 0 } });
+      map.addLayer({ id: "route-line", type: "line", source: "route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#f97316", "line-width": 4, "line-opacity": mode === "none" ? 0.95 : 0 } });
 
       const metricMode = mode === "none" ? null : mode;
       const metricOverlay = metricMode && overlay.data?.metric === metricMode && overlay.data.geojson?.features?.length ? overlay.data : null;
@@ -158,6 +158,11 @@ export function RouteMap({ activityId, points }: { activityId: number; points: R
           map.getCanvas().style.cursor = "";
           tooltipRef.current?.remove();
         });
+      }
+
+      if (overlay.data?.paused_geojson?.features?.length) {
+        map.addSource("paused-route", { type: "geojson", data: overlay.data.paused_geojson });
+        map.addLayer({ id: "paused-route-line", type: "line", source: "paused-route", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#94a3b8", "line-width": 3, "line-opacity": 0.8, "line-dasharray": [1, 1.5] } });
       }
 
       if (overlay.data?.markers?.length) {

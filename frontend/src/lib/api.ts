@@ -23,9 +23,9 @@ export type Zone = { label: string; min: number; max: number };
 export type BestEffortDistanceSetting = { id?: number; label: string; distance_m: number; enabled: boolean; sort_order: number };
 export type PersonalBest = { distance_m: number; label?: string; duration_s: number; pace_s_per_km: number; activity_id: number; activity_title: string; local_date: string };
 export type RouteResponse = { simplified_points_json: [number, number, number | null][]; original_point_count: number; simplified_point_count: number; simplification_tolerance_m?: number | null };
-export type StreamResponse = { x_domain_m: [number, number]; streams: Record<string, [number, number | null][]> };
+export type StreamResponse = { x_domain_m: [number, number]; streams: Record<string, [number, number | null][]>; pauses?: { start_distance_m: number; end_distance_m: number; duration_s: number }[] };
 export type RouteOverlayMetric = "pace" | "heart_rate" | "gradient" | "cadence";
-export type RouteOverlayResponse = { metric: RouteOverlayMetric; unit: string; min_value?: number | null; max_value?: number | null; has_heart_rate: boolean; has_cadence: boolean; markers: {type: "start" | "finish" | "pause"; coordinates: [number, number]; gap_s?: number}[]; geojson: FeatureCollection<Geometry> };
+export type RouteOverlayResponse = { metric: RouteOverlayMetric; unit: string; min_value?: number | null; max_value?: number | null; has_heart_rate: boolean; has_cadence: boolean; markers: {type: "start" | "finish" | "pause"; coordinates: [number, number]; gap_s?: number}[]; paused_geojson?: FeatureCollection<Geometry>; geojson: FeatureCollection<Geometry> };
 export type Split = { id: number; split_index: number; duration_s: number; avg_pace_s_per_km?: number | null; avg_heart_rate_bpm?: number | null };
 export type BestEffort = { distance_m: number; duration_s: number; pace_s_per_km: number };
 

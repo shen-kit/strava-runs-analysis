@@ -18,6 +18,7 @@ export default function ActivityDetailPage() {
   const xDomainKm: [number, number] | undefined = streams.data?.x_domain_m ? [streams.data.x_domain_m[0] / 1000, streams.data.x_domain_m[1] / 1000] : undefined;
   const streamRows = (name: string, valueKey: string, transform: (v: number) => number = (v) => v) => (streams.data?.streams?.[name] ?? []).map(([d, v]: [number, number | null]) => ({ km: d / 1000, [valueKey]: v == null ? null : transform(v) }));
   const elevationRows = streamRows("elevation", "elevation");
+  const pauses = streams.data?.pauses ?? [];
 
   return <main className="page-shell page-stack">
     {activity.isLoading ? <div className="status">Loading activity…</div> : activity.isError ? <div className="error-state">Activity failed to load.</div> : !a ? <div className="empty-state">Activity not found.</div> : <>
@@ -62,10 +63,10 @@ export default function ActivityDetailPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <StreamCard title="Pace" subtitle="Pace stream with elevation context."><StreamLine data={streamRows("pace", "pace", (v) => v / 60)} yKey="pace" name="min/km" kind="pace" noData="No pace data" xDomainKm={xDomainKm} elevationData={elevationRows} /></StreamCard>
-        <StreamCard title="Elevation" subtitle="Elevation profile over distance."><StreamLine data={elevationRows} yKey="elevation" name="m" kind="elevation" noData="No elevation data" xDomainKm={xDomainKm} /></StreamCard>
-        <StreamCard title="Heart rate" subtitle="Heart rate stream with elevation context."><StreamLine data={streamRows("heart_rate", "heart_rate")} yKey="heart_rate" name="bpm" xDomainKm={xDomainKm} elevationData={elevationRows} /></StreamCard>
-        <StreamCard title="Cadence" subtitle="Cadence stream with elevation context."><StreamLine data={streamRows("cadence", "cadence")} yKey="cadence" name="spm" xDomainKm={xDomainKm} elevationData={elevationRows} /></StreamCard>
+        <StreamCard title="Pace" subtitle="Pace stream with elevation context."><StreamLine data={streamRows("pace", "pace", (v) => v / 60)} yKey="pace" name="min/km" kind="pace" noData="No pace data" xDomainKm={xDomainKm} elevationData={elevationRows} pauses={pauses} /></StreamCard>
+        <StreamCard title="Elevation" subtitle="Elevation profile over distance."><StreamLine data={elevationRows} yKey="elevation" name="m" kind="elevation" noData="No elevation data" xDomainKm={xDomainKm} pauses={pauses} /></StreamCard>
+        <StreamCard title="Heart rate" subtitle="Heart rate stream with elevation context."><StreamLine data={streamRows("heart_rate", "heart_rate")} yKey="heart_rate" name="bpm" xDomainKm={xDomainKm} elevationData={elevationRows} pauses={pauses} /></StreamCard>
+        <StreamCard title="Cadence" subtitle="Cadence stream with elevation context."><StreamLine data={streamRows("cadence", "cadence")} yKey="cadence" name="spm" xDomainKm={xDomainKm} elevationData={elevationRows} pauses={pauses} /></StreamCard>
       </section>
     </>}
   </main>;
