@@ -146,6 +146,12 @@ class ActivityImportDiagnostic(SQLModel, table=True):
     source_activity_id: Optional[str] = Field(default=None, index=True)
     source_filename: Optional[str] = None
     parser_name: Optional[str] = None
+    file_hash: Optional[str] = Field(default=None, index=True)
+    inferred_title: Optional[str] = None
+    inferred_start_time: Optional[datetime] = None
+    computed_distance_m: Optional[float] = None
+    computed_duration_s: Optional[float] = None
+    duplicate_reason: Optional[str] = None
     parse_status: str
     points_raw_count: Optional[int] = None
     points_normalized_count: Optional[int] = None

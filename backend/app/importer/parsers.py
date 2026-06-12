@@ -286,3 +286,32 @@ def get_parser(path: Path) -> TrackPointsFileParser:
         if ext in parser.supported_extensions:
             return parser
     raise ValueError(f"Unsupported activity file extension: {path.name}")
+
+
+def activity_title_from_file(path: Path) -> str | None:
+    """Best-effort activity name extraction without affecting point parsing."""
+    try:
+        ext = suffix_key(path)
+        if ext in {".gpx", ".gpx.gz"}:
+            root = GpxTrackPointsParser().parse_file(path)
+            for trk in root.iter():
+                if _strip(trk.tag) != "trk":
+                    continue
+                for child in list(trk):
+                    if _strip(child.tag) == "name" and child.text and child.text.strip():
+                        return child.text.strip()
+            for child in root.iter():
+                if _strip(child.tag) == "name" and child.text and child.text.strip():
+                    return child.text.strip()
+        if ext in {".tcx", ".tcx.gz"}:
+            root = TcxTrackPointsParser().parse_file(path)
+            for activity in root.iter():
+                if _strip(activity.tag) != "Activity":
+                    continue
+                for child in list(activity):
+                    if _strip(child.tag) in {"Name", "Id"} and child.text and child.text.strip():
+                        return child.text.strip()
+        return None
+    except Exception:
+        logger.exception("Failed to infer activity title", extra={"path": str(path)})
+        return None

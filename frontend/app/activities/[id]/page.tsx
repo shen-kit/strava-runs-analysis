@@ -24,14 +24,14 @@ export default function ActivityDetailPage() {
       <div className="page-header">
         <div>
           <h1 className="page-title">{a.title}</h1>
-          <p className="page-subtitle">{formatDate(a.local_date)} · {formatDistance(a.source_distance_m)} · {formatDuration(a.moving_time_s)}</p>
+          <p className="page-subtitle">{formatDate(a.local_date)} · {formatDistance(a.source_distance_m ?? a.computed_distance_m)} · {formatDuration(a.moving_time_s ?? a.elapsed_time_s)}</p>
         </div>
       </div>
 
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Card label="Date" value={formatDate(a.local_date)}/>
-        <Card label="Distance" value={formatDistance(a.source_distance_m)}/>
-        <Card label="Time" value={formatDuration(a.moving_time_s)}/>
+        <Card label="Distance" value={formatDistance(a.source_distance_m ?? a.computed_distance_m)}/>
+        <Card label="Time" value={formatDuration(a.moving_time_s ?? a.elapsed_time_s)}/>
         <Card label="Pace" value={formatPace(a.avg_pace_s_per_km)}/>
         <Card label="Elevation" value={formatElevation(a.elevation_gain_m)}/>
         <Card label="Avg HR" value={a.avg_heart_rate_bpm ? Math.round(a.avg_heart_rate_bpm) : "—"}/>
@@ -41,7 +41,7 @@ export default function ActivityDetailPage() {
 
       <section className="card">
         <div className="section-heading"><div><h2 className="section-title">Distance check</h2><p className="section-subtitle">Source distance compared with cleaned track distance.</p></div></div>
-        <p className="muted">Source: <b className="text-foreground">{formatDistance(a.source_distance_m)}</b> · Computed: <b className="text-foreground">{formatDistance(a.computed_distance_m)}</b> · Difference: <b className="text-foreground">{formatDistance((a.source_distance_m ?? 0) - (a.computed_distance_m ?? 0))}</b></p>
+        <p className="muted">Source: <b className="text-foreground">{formatDistance(a.source_distance_m)}</b> · Computed: <b className="text-foreground">{formatDistance(a.computed_distance_m)}</b> · Difference: <b className="text-foreground">{a.source_distance_m == null || a.computed_distance_m == null ? "—" : formatDistance(a.source_distance_m - a.computed_distance_m)}</b></p>
       </section>
 
       <section className="card map-card">

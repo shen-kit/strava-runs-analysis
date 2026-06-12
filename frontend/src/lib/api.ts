@@ -7,7 +7,8 @@ export type Activity = {
   moving_time_s?: number; elapsed_time_s?: number; elevation_gain_m?: number; avg_pace_s_per_km?: number; avg_heart_rate_bpm?: number;
   avg_cadence_spm?: number; source_activity_id?: string; source_filename?: string;
 };
-export type ImportJob = { status: string; run_activities_seen: number; processed_count: number; new_count: number; skipped_count: number; reprocessed_count: number; failed_count: number; skipped_non_run_activities_count: number; error_message?: string | null };
+export type ImportDiagnostic = { source_filename?: string | null; parser_name?: string | null; parse_status: string; file_hash?: string | null; inferred_title?: string | null; inferred_start_time?: string | null; computed_distance_m?: number | null; computed_duration_s?: number | null; duplicate_reason?: string | null; warnings?: string[] | null; error_message?: string | null };
+export type ImportJob = { status: string; run_activities_seen: number; processed_count: number; new_count: number; skipped_count: number; reprocessed_count: number; failed_count: number; skipped_non_run_activities_count: number; error_message?: string | null; diagnostics?: ImportDiagnostic[] };
 export type Summary = { total_runs: number; total_distance_m: number; total_moving_time_s: number; total_elevation_gain_m: number; average_pace_s_per_km?: number | null; longest_run_distance_m: number; latest_activity_date?: string | null; current_month_distance_m: number; current_year_distance_m: number };
 export type StatRow = Record<string, string | number | null>;
 export type TotalRow = { bucket: string; run_count: number; days_run?: number; distance_m: number; moving_time_s: number; elevation_gain_m: number; rolling_4_week_avg_distance_m?: number | null };
@@ -63,6 +64,11 @@ export const api = {
     form.append("force_reprocess_all", String(forceReprocessAll));
     form.append("force_reprocess_extensions", forceReprocessExtensions.join(","));
     return request<{id: number; status: string}>("/imports/strava-zip", { method: "POST", body: form });
+  },
+  uploadActivityFiles: async (files: File[]) => {
+    const form = new FormData();
+    for (const file of files) form.append("files", file);
+    return request<{id: number; status: string}>("/imports/activity-files", { method: "POST", body: form });
   },
   importJob: (id: number) => request<ImportJob>(`/imports/${id}`),
 };

@@ -4,11 +4,12 @@ from pathlib import Path
 from sqlmodel import Session, SQLModel, select
 
 from app.db import engine, init_db
-from app.models import Activity, ImportJob
+from app.models import Activity, ActivityImportDiagnostic, ImportJob
 from app.importer.parsers import GpxTrackPointsParser, TcxTrackPointsParser, ParsedTrackPoint, suffix_key
 from app.importer.strava_csv import read_activities_csv
 from app.importer.derive import clean_points, computed_distance_m, generate_splits, generate_best_efforts, simplify_route
-from app.importer.job import process_import_job
+from app.importer.job import import_single_activity_file, process_import_job
+from app.api.stats import distance_distribution, long_run_progression, summary, totals
 
 
 def setup_function():
@@ -28,6 +29,19 @@ def make_tcx(path: Path):
 <Trackpoint><Time>2026-01-01T00:00:00Z</Time><Position><LatitudeDegrees>-37</LatitudeDegrees><LongitudeDegrees>145</LongitudeDegrees></Position><AltitudeMeters>10</AltitudeMeters><HeartRateBpm><Value>121</Value></HeartRateBpm><Cadence>86</Cadence></Trackpoint>
 <Trackpoint><Time>2026-01-01T00:05:00Z</Time><Position><LatitudeDegrees>-37</LatitudeDegrees><LongitudeDegrees>145.009</LongitudeDegrees></Position><AltitudeMeters>12</AltitudeMeters></Trackpoint>
 </Track></Lap></Activity></Activities></TrainingCenterDatabase>''')
+
+
+def make_named_gpx(path: Path, name: str | None = None, start="2026-01-01T00:00:00Z", end="2026-01-01T00:05:00Z", lon2="145.009", extra=""):
+    name_xml = f"<name>{name}</name>" if name else ""
+    path.write_text(f'''<?xml version="1.0"?><gpx xmlns="http://www.topografix.com/GPX/1/1"><trk>{name_xml}<trkseg>
+<trkpt lat="-37.0" lon="145.0"><ele>10</ele><time>{start}</time></trkpt>
+<trkpt lat="-37.0" lon="{lon2}"><ele>12</ele><time>{end}</time></trkpt>
+</trkseg></trk>{extra}</gpx>''')
+
+
+def make_job() -> int:
+    with Session(engine) as s:
+        job = ImportJob(); s.add(job); s.commit(); s.refresh(job); return job.id
 
 
 def test_csv_parses_runs_and_skips_non_runs(tmp_path):
@@ -122,3 +136,74 @@ def test_force_reprocess_all_and_extensions(tmp_path):
     assert forced_all.reprocessed_count == 2 and forced_all.skipped_count == 0
     forced_gpx = run_zip(z, tmp_path, force_ext=["gpx"])
     assert forced_gpx.reprocessed_count == 2 and forced_gpx.skipped_count == 0
+
+
+def test_manual_file_title_falls_back_to_filename(tmp_path):
+    p = tmp_path / "Lunch_run.gpx"
+    make_named_gpx(p)
+    assert import_single_activity_file(make_job(), p, original_filename=p.name) == "new"
+    with Session(engine) as s:
+        a = s.exec(select(Activity)).one()
+        assert a.title == "Lunch run"
+        assert a.source_sport_type == "Run"
+        assert a.source_distance_m is None and a.computed_distance_m
+
+
+def test_manual_file_title_uses_activity_name(tmp_path):
+    p = tmp_path / "file-name.gpx"
+    make_named_gpx(p, name="Track title")
+    assert import_single_activity_file(make_job(), p, original_filename=p.name) == "new"
+    with Session(engine) as s:
+        assert s.exec(select(Activity)).one().title == "Track title"
+
+
+def test_manual_exact_file_hash_duplicate_skipped(tmp_path):
+    p = tmp_path / "dup.gpx"
+    make_named_gpx(p)
+    assert import_single_activity_file(make_job(), p, original_filename=p.name) == "new"
+    assert import_single_activity_file(make_job(), p, original_filename=p.name) == "skipped"
+    with Session(engine) as s:
+        assert len(s.exec(select(Activity)).all()) == 1
+        diag = s.exec(select(ActivityImportDiagnostic).where(ActivityImportDiagnostic.parse_status == "skipped")).one()
+        assert diag.duplicate_reason == "file_hash"
+
+
+def test_manual_fuzzy_duplicate_skipped_with_different_hash(tmp_path):
+    a = tmp_path / "a.gpx"; b = tmp_path / "b.gpx"
+    make_named_gpx(a)
+    make_named_gpx(b, extra="<!-- different hash -->")
+    assert import_single_activity_file(make_job(), a, original_filename=a.name) == "new"
+    assert import_single_activity_file(make_job(), b, original_filename=b.name) == "skipped"
+    with Session(engine) as s:
+        assert len(s.exec(select(Activity)).all()) == 1
+        diag = s.exec(select(ActivityImportDiagnostic).where(ActivityImportDiagnostic.parse_status == "skipped")).one()
+        assert diag.duplicate_reason and diag.duplicate_reason.startswith("fuzzy_duplicate")
+
+
+def test_manual_nearby_non_duplicate_imported(tmp_path):
+    a = tmp_path / "a.gpx"; b = tmp_path / "b.gpx"
+    make_named_gpx(a)
+    make_named_gpx(b, lon2="145.011", extra="<!-- different distance beyond tolerance -->")
+    assert import_single_activity_file(make_job(), a, original_filename=a.name) == "new"
+    assert import_single_activity_file(make_job(), b, original_filename=b.name) == "new"
+    with Session(engine) as s:
+        assert len(s.exec(select(Activity)).all()) == 2
+
+
+def test_dashboard_stats_use_computed_distance_for_manual_imports(tmp_path):
+    p = tmp_path / "manual_run.gpx"
+    make_named_gpx(p)
+    assert import_single_activity_file(make_job(), p, original_filename=p.name) == "new"
+    with Session(engine) as s:
+        a = s.exec(select(Activity)).one()
+        assert a.source_distance_m is None and a.computed_distance_m and a.computed_distance_m > 700
+        summ = summary(s)
+        assert summ["total_distance_m"] == a.computed_distance_m
+        assert summ["longest_run_distance_m"] == a.computed_distance_m
+        assert summ["average_pace_s_per_km"] is not None
+        total_rows = totals("week", s)
+        assert total_rows and total_rows[0]["distance_m"] == a.computed_distance_m
+        long_rows = long_run_progression("week", s)
+        assert long_rows and long_rows[0]["longest_run_distance_m"] == a.computed_distance_m
+        distribution_rows = distance_distribution(s)
+        assert sum(row["distance_m"] for row in distribution_rows) == a.computed_distance_m

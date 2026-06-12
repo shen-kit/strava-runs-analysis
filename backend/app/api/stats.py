@@ -21,10 +21,18 @@ def get_activities(session: Session):
     return session.exec(select(Activity)).all()
 
 
+def activity_distance_m(a: Activity) -> float:
+    return a.source_distance_m if a.source_distance_m is not None else (a.computed_distance_m or 0)
+
+
+def activity_duration_s(a: Activity) -> float:
+    return a.moving_time_s if a.moving_time_s is not None else (a.elapsed_time_s or 0)
+
+
 def _totals_rows(acts: list[Activity], bucket: str):
     groups = defaultdict(lambda: {"bucket":None,"run_count":0,"distance_m":0.0,"moving_time_s":0.0,"elevation_gain_m":0.0,"days_run":set()})
     for a in acts:
-        k = bucket_key(a.local_date, bucket); g = groups[k]; g["bucket"] = k; g["run_count"] += 1; g["distance_m"] += a.source_distance_m or 0; g["moving_time_s"] += a.moving_time_s or 0; g["elevation_gain_m"] += a.elevation_gain_m or 0; g["days_run"].add(a.local_date.isoformat())
+        k = bucket_key(a.local_date, bucket); g = groups[k]; g["bucket"] = k; g["run_count"] += 1; g["distance_m"] += activity_distance_m(a); g["moving_time_s"] += activity_duration_s(a); g["elevation_gain_m"] += a.elevation_gain_m or 0; g["days_run"].add(a.local_date.isoformat())
     rows=[]
     for k in sorted(groups):
         g=groups[k]; rows.append({**g, "days_run": len(g["days_run"])})
@@ -36,8 +44,8 @@ def summary(session: Session = Depends(get_session)):
     acts = get_activities(session)
     today = date.today()
     total_runs = len(acts)
-    dist = sum(a.source_distance_m or 0 for a in acts)
-    move = sum(a.moving_time_s or 0 for a in acts)
+    dist = sum(activity_distance_m(a) for a in acts)
+    move = sum(activity_duration_s(a) for a in acts)
     elev = sum(a.elevation_gain_m or 0 for a in acts)
     return {
         "total_runs": total_runs,
@@ -45,10 +53,10 @@ def summary(session: Session = Depends(get_session)):
         "total_moving_time_s": move,
         "total_elevation_gain_m": elev,
         "average_pace_s_per_km": move/(dist/1000) if dist > 0 and move > 0 else None,
-        "longest_run_distance_m": max([a.source_distance_m or 0 for a in acts], default=0),
+        "longest_run_distance_m": max([activity_distance_m(a) for a in acts], default=0),
         "latest_activity_date": max([a.local_date for a in acts], default=None),
-        "current_month_distance_m": sum(a.source_distance_m or 0 for a in acts if a.local_date.year == today.year and a.local_date.month == today.month),
-        "current_year_distance_m": sum(a.source_distance_m or 0 for a in acts if a.local_date.year == today.year),
+        "current_month_distance_m": sum(activity_distance_m(a) for a in acts if a.local_date.year == today.year and a.local_date.month == today.month),
+        "current_year_distance_m": sum(activity_distance_m(a) for a in acts if a.local_date.year == today.year),
     }
 
 
@@ -117,7 +125,7 @@ def best_effort_trend(distances: str = "", session: Session = Depends(get_sessio
 def long_run_progression(bucket: str = Query("week", pattern="^(week|month|year)$"), session: Session = Depends(get_session)):
     groups = defaultdict(lambda: {"bucket":None,"longest_run_distance_m":0.0,"activity_id":None,"activity_title":None,"local_date":None})
     for a in get_activities(session):
-        k=bucket_key(a.local_date,bucket); d=a.source_distance_m or 0; g=groups[k]; g["bucket"]=k
+        k=bucket_key(a.local_date,bucket); d=activity_distance_m(a); g=groups[k]; g["bucket"]=k
         if d > g["longest_run_distance_m"]:
             g.update({"longest_run_distance_m":d,"activity_id":a.id,"activity_title":a.title,"local_date":a.local_date})
     return [groups[k] for k in sorted(groups)]
@@ -128,7 +136,7 @@ def distance_distribution(session: Session = Depends(get_session)):
     buckets=[("0-5km",0,5000), ("5-10km",5000,10000), ("10-15km",10000,15000), ("15-21.1km",15000,21097.5), ("21.1km+",21097.5,float("inf"))]
     out=[{"bucket":name,"run_count":0,"distance_m":0.0} for name,_,__ in buckets]
     for a in get_activities(session):
-        d=a.source_distance_m or 0
+        d=activity_distance_m(a)
         for i,(_,lo,hi) in enumerate(buckets):
             if lo <= d < hi:
                 out[i]["run_count"] += 1; out[i]["distance_m"] += d; break
