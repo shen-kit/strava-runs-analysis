@@ -4,11 +4,12 @@ from pathlib import Path
 from sqlmodel import Session, SQLModel, select
 
 from app.db import engine, init_db
-from app.models import Activity, ActivityImportDiagnostic, ImportJob
+from app.models import Activity, ActivityImportDiagnostic, ActivityRoute, ActivitySplit, BestEffort, ImportJob, TrackPoint
 from app.importer.parsers import GpxTrackPointsParser, TcxTrackPointsParser, ParsedTrackPoint, suffix_key
 from app.importer.strava_csv import read_activities_csv
 from app.importer.derive import clean_points, computed_distance_m, generate_splits, generate_best_efforts, simplify_route
 from app.importer.job import import_single_activity_file, process_import_job
+from app.api.activities import delete_activity
 from app.api.stats import distance_distribution, long_run_progression, summary, totals
 
 
@@ -188,6 +189,26 @@ def test_manual_nearby_non_duplicate_imported(tmp_path):
     assert import_single_activity_file(make_job(), b, original_filename=b.name) == "new"
     with Session(engine) as s:
         assert len(s.exec(select(Activity)).all()) == 2
+
+
+def test_delete_activity_hard_deletes_metrics_and_allows_reimport(tmp_path):
+    p = tmp_path / "delete_me.gpx"
+    make_named_gpx(p)
+    assert import_single_activity_file(make_job(), p, original_filename=p.name) == "new"
+    with Session(engine) as s:
+        activity = s.exec(select(Activity)).one()
+        activity_id = activity.id
+        assert s.exec(select(TrackPoint).where(TrackPoint.activity_id == activity_id)).all()
+        delete_activity(activity_id, s)
+    with Session(engine) as s:
+        assert not s.exec(select(Activity)).all()
+        assert not s.exec(select(TrackPoint)).all()
+        assert not s.exec(select(ActivitySplit)).all()
+        assert not s.exec(select(BestEffort)).all()
+        assert not s.exec(select(ActivityRoute)).all()
+    assert import_single_activity_file(make_job(), p, original_filename=p.name) == "new"
+    with Session(engine) as s:
+        assert len(s.exec(select(Activity)).all()) == 1
 
 
 def test_dashboard_stats_use_computed_distance_for_manual_imports(tmp_path):

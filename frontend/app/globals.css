@@ -154,6 +154,15 @@ select option { background: var(--surface); color: var(--foreground); }
 .table tbody tr:last-child th, .table tbody tr:last-child td { border-bottom: 0; }
 .table tbody tr:hover td, .table tbody tr:hover th { background: var(--surface-muted); }
 .table a { font-weight: 650; }
+.actions-cell { position: relative; width: 1%; text-align: right !important; }
+.actions-menu { position: static; display: inline-flex; justify-content: flex-end; }
+.actions-trigger { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border: 0; border-radius: 999px; background: transparent; color: var(--muted-strong); font-size: 1.35rem; font-weight: 800; line-height: 1; cursor: pointer; }
+.actions-trigger:hover { background: var(--surface-muted); color: var(--foreground); }
+.actions-popover { position: absolute; right: 0.5rem; top: calc(100% - 0.25rem); z-index: 30; min-width: 10rem; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-elevated); box-shadow: var(--shadow-card); }
+.actions-item { display: flex; width: 100%; justify-content: flex-start; border: 0; border-radius: 0; box-shadow: none; padding: 0.65rem 0.8rem; text-align: left; }
+.actions-item:hover { background: var(--surface-muted); }
+.actions-danger { color: var(--danger); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 
 .empty-state { display: grid; min-height: 7rem; place-items: center; border: 1px dashed var(--border-strong); border-radius: var(--radius-card); background: var(--surface-muted); color: var(--muted); padding: 1.25rem; text-align: center; }
 .status { border-radius: var(--radius-card); background: var(--surface-muted); color: var(--muted); padding: 1rem; }

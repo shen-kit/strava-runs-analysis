@@ -36,6 +36,17 @@ def get_activity(activity_id: int, session: Session = Depends(get_session)):
     return activity_summary(activity_or_404(session, activity_id))
 
 
+@router.delete("/{activity_id}")
+def delete_activity(activity_id: int, session: Session = Depends(get_session)):
+    activity = activity_or_404(session, activity_id)
+    for cls in (TrackPoint, ActivitySplit, BestEffort, ActivityRoute):
+        for obj in session.exec(select(cls).where(cls.activity_id == activity_id)).all():
+            session.delete(obj)
+    session.delete(activity)
+    session.commit()
+    return {"status": "deleted", "activity_id": activity_id}
+
+
 @router.get("/{activity_id}/route")
 def get_route(activity_id: int, session: Session = Depends(get_session)):
     activity_or_404(session, activity_id)
