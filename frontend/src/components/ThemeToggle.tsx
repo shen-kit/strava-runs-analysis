@@ -47,7 +47,6 @@ export function ThemeToggle() {
       className="btn btn-sm btn-ghost"
     >
       <span aria-hidden="true">{isDark ? "☾" : "☀"}</span>
-      {isDark ? "Dark" : "Light"}
     </button>
   );
 }

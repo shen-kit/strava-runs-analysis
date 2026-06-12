@@ -17,16 +17,16 @@ export function Nav() {
   return (
     <nav className="app-nav">
       <div className="nav-inner">
-        <div className="flex items-center gap-3">
+        <div className="nav-top">
           <Link href="/" className="nav-brand">Run Tracker</Link>
-          <div className="nav-links" aria-label="Primary navigation">
-            {links.map((link) => {
-              const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
-              return <Link key={link.href} href={link.href} className={`nav-link ${active ? "nav-link-active" : ""}`}>{link.label}</Link>;
-            })}
-          </div>
+          <div className="nav-actions"><button className="btn btn-sm icon-btn" aria-label="Open settings" title="Settings" onClick={settings.open}>⚙</button><ThemeToggle /></div>
         </div>
-        <div className="toolbar"><button className="btn btn-sm" onClick={settings.open}>Settings</button><ThemeToggle /></div>
+        <div className="nav-links" aria-label="Primary navigation">
+          {links.map((link) => {
+            const active = link.href === "/" ? pathname === "/" : pathname.startsWith(link.href);
+            return <Link key={link.href} href={link.href} className={`nav-link ${active ? "nav-link-active" : ""}`}>{link.label}</Link>;
+          })}
+        </div>
       </div>
     </nav>
   );
