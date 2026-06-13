@@ -1,11 +1,12 @@
 "use client";
-import type { ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
-import { Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
 import { api, type BestEffortDistanceSetting, type PersonalBest, type StatRow, type TotalRow } from "@/src/lib/api";
 import { useSettings } from "@/src/components/SettingsContext";
+import { ResponsiveChart } from "@/src/components/ResponsiveChart";
 import { formatDistance, formatDuration, formatElevation, formatPace, formatDate } from "@/src/lib/format";
 
 type ChartRow = Record<string, string | number | null>;
@@ -129,7 +130,7 @@ function ChartSection({ title, subtitle, children }: { title: string; subtitle?:
 function Empty({ text = "No data" }) { return <div className="empty-state">{text}</div>; }
 function Loading({ text = "Loading…" }) { return <div className="status">{text}</div>; }
 function ErrorState({ text }: { text: string }) { return <div className="error-state">{text}</div>; }
-function ChartWrap({ children }: { children: ReactNode }) { const [mounted, setMounted] = useState(false); useEffect(() => setMounted(true), []); return <div className="chart-wrap">{mounted ? <ResponsiveContainer>{children}</ResponsiveContainer> : <div className="chart-placeholder" />}</div>; }
+function ChartWrap({ children }: { children: ReactElement }) { return <ResponsiveChart className="chart-wrap">{children}</ResponsiveChart>; }
 function Tip() { return <Tooltip formatter={(v) => round2(v)}/>; }
 function Volume({ data, bucket }: { data: ChartRow[]; bucket: Bucket }) { if (!data.length) return <Empty/>; return <ChartWrap><ComposedChart data={data}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="bucket" label={{value: bucket, position:"insideBottom", offset:-4}}/><YAxis tickFormatter={kmTick} label={{value:"Distance", angle:-90, position:"insideLeft"}}/><Tip/><Bar dataKey="distance_km" name="Distance km" fill={C.blue} radius={[4,4,0,0]}/><Line type="monotone" dataKey="rolling_km" name="4-period avg km" stroke={C.orange} strokeWidth={2} dot={false}/></ComposedChart></ChartWrap>; }
 function Consistency({ data, summary }: { data: ChartRow[]; summary?: {current_week_count:number; average_runs_per_week:number} }) { if (!data.length) return <Empty/>; return <><div className="mb-3 text-sm muted">Current week: <b>{summary?.current_week_count ?? 0}</b> runs · Avg active week: <b>{(summary?.average_runs_per_week ?? 0).toFixed(1)}</b> runs</div><ChartWrap><ComposedChart data={data}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="bucket" label={{value:"Period", position:"insideBottom", offset:-4}}/><YAxis label={{value:"Count", angle:-90, position:"insideLeft"}}/><Tip/><Bar dataKey="runs" name="Runs" fill={C.green} radius={[4,4,0,0]}/><Line type="monotone" dataKey="days_run" name="Days run" stroke={C.text} strokeWidth={2} dot={false}/></ComposedChart></ChartWrap></>; }

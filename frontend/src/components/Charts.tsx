@@ -1,11 +1,12 @@
 "use client";
-import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, ReferenceArea, Tooltip, XAxis, YAxis } from "recharts";
 import { formatPace } from "@/src/lib/format";
+import { ResponsiveChart } from "@/src/components/ResponsiveChart";
 
 const C = { blue: "var(--chart-1)", green: "var(--chart-2)", elevation: "var(--chart-muted)" };
 
 export function DistanceBar({ data }: { data: Array<Record<string, string | number | null>> }) {
-  return <div className="chart-wrap"><ResponsiveContainer><BarChart data={data}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="bucket"/><YAxis/><Tooltip/><Bar dataKey="distance_km" fill={C.blue} radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div>;
+  return <ResponsiveChart className="chart-wrap"><BarChart data={data}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="bucket"/><YAxis/><Tooltip/><Bar dataKey="distance_km" fill={C.blue} radius={[4,4,0,0]}/></BarChart></ResponsiveChart>;
 }
 
 type ChartRow = Record<string, string | number | null | undefined>;
@@ -90,5 +91,5 @@ export function StreamLine({ data, yKey, name, kind = "generic", noData, xDomain
     return num;
   };
   const Chart = hasElevationOverlay ? ComposedChart : LineChart;
-  return <div className="chart-wrap-sm"><ResponsiveContainer><Chart data={chartData}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="km" type="number" tickFormatter={distanceTick} label={{ value: "Distance (km)", position: "insideBottom", offset: -4 }} domain={xDomainKm ?? ["dataMin", "dataMax"]}/><YAxis yAxisId="left" tickFormatter={yTick} domain={domain} reversed={kind === "pace"}/>{hasElevationOverlay && <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${Math.round(v)}m`} domain={elevationDomain} width={42} stroke={C.elevation}/>}<Tooltip formatter={tooltipFormatter} labelFormatter={(v) => `Distance ${distanceTick(Number(v))}`}/>{pauses.map((p, i) => <ReferenceArea key={i} x1={p.start_distance_m / 1000} x2={p.end_distance_m / 1000} yAxisId="left" fill="var(--chart-muted)" fillOpacity={0.5} strokeOpacity={0} />)}{hasElevationOverlay && <Area yAxisId="right" type="monotone" dataKey="elevationOverlay" name="Elevation" stroke={C.elevation} strokeOpacity={0.4} fill={C.elevation} fillOpacity={0.16} connectNulls={false} isAnimationActive={false}/>}<Line yAxisId="left" dot={false} connectNulls={hasElevationOverlay} type="monotone" dataKey={yKey} name={name} stroke={C.green} strokeWidth={2}/></Chart></ResponsiveContainer></div>;
+  return <ResponsiveChart className="chart-wrap-sm"><Chart data={chartData}><CartesianGrid strokeDasharray="3 3"/><XAxis dataKey="km" type="number" tickFormatter={distanceTick} label={{ value: "Distance (km)", position: "insideBottom", offset: -4 }} domain={xDomainKm ?? ["dataMin", "dataMax"]}/><YAxis yAxisId="left" tickFormatter={yTick} domain={domain} reversed={kind === "pace"}/>{hasElevationOverlay && <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => `${Math.round(v)}m`} domain={elevationDomain} width={42} stroke={C.elevation}/>}<Tooltip formatter={tooltipFormatter} labelFormatter={(v) => `Distance ${distanceTick(Number(v))}`}/>{pauses.map((p, i) => <ReferenceArea key={i} x1={p.start_distance_m / 1000} x2={p.end_distance_m / 1000} yAxisId="left" fill="var(--chart-muted)" fillOpacity={0.5} strokeOpacity={0} />)}{hasElevationOverlay && <Area yAxisId="right" type="monotone" dataKey="elevationOverlay" name="Elevation" stroke={C.elevation} strokeOpacity={0.4} fill={C.elevation} fillOpacity={0.16} connectNulls={false} isAnimationActive={false}/>}<Line yAxisId="left" dot={false} connectNulls={hasElevationOverlay} type="monotone" dataKey={yKey} name={name} stroke={C.green} strokeWidth={2}/></Chart></ResponsiveChart>;
 }
