@@ -1,0 +1,28 @@
+services:
+  backend:
+    build: ./backend
+    environment:
+      DATABASE_URL: sqlite:////data/app.db
+      IMPORT_TMP_DIR: /data/imports_tmp
+      CORS_ALLOWED_ORIGINS: http://<REPLACE_SERVER_LAN_IP>:3000
+      DEFAULT_TIMEZONE: <REPLACE_TIMEZONE>
+    volumes:
+      - <REPLACE_DATA_DIR>:/data
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      target: runner
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://<REPLACE_SERVER_LAN_IP>:8000
+        NEXT_PUBLIC_MAP_TILE_URL_SATELLITE: "<REPLACE_SATELLITE_TILE_URL>"
+        NEXT_PUBLIC_MAP_TILE_URL_STREET: "<REPLACE_STREET_TILE_URL>"
+        NEXT_PUBLIC_MAP_ATTRIBUTION: "<REPLACE_MAP_ATTRIBUTION>"
+    depends_on:
+      - backend
+    ports:
+      - "<REPLACE_SERVER_LAN_IP>:3000:3000"
+    restart: unless-stopped
