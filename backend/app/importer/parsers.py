@@ -43,7 +43,11 @@ def parse_time(value: str | None) -> datetime | None:
 
 
 def _open_text(path: Path):
-    return gzip.open(path, "rt", encoding="utf-8", errors="replace") if path.name.endswith(".gz") else open(path, "rt", encoding="utf-8", errors="replace")
+    return (
+        gzip.open(path, "rt", encoding="utf-8", errors="replace")
+        if path.name.endswith(".gz")
+        else open(path, "rt", encoding="utf-8", errors="replace")
+    )
 
 
 def _strip(tag: str) -> str:
@@ -84,13 +88,16 @@ def normalize_cadence(value: float | None) -> float | None:
 def haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     r = 6371000.0
     p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp = math.radians(lat2 - lat1); dl = math.radians(lon2 - lon1)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
     a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
     return 2 * r * math.atan2(math.sqrt(a), math.sqrt(1 - a))
 
 
 def _fill_missing_distances_by_time(points: list[ParsedTrackPoint]) -> None:
-    anchors = [p for p in points if p.timestamp is not None and p.distance_m is not None]
+    anchors = [
+        p for p in points if p.timestamp is not None and p.distance_m is not None
+    ]
     if not anchors:
         return
     anchors.sort(key=lambda p: p.timestamp)
@@ -108,22 +115,37 @@ def _fill_missing_distances_by_time(points: list[ParsedTrackPoint]) -> None:
         if prev and nxt and nxt.timestamp > prev.timestamp:
             dt = (nxt.timestamp - prev.timestamp).total_seconds()
             f = (p.timestamp - prev.timestamp).total_seconds() / dt
-            p.distance_m = float(prev.distance_m) + (float(nxt.distance_m) - float(prev.distance_m)) * f
+            p.distance_m = (
+                float(prev.distance_m)
+                + (float(nxt.distance_m) - float(prev.distance_m)) * f
+            )
         elif prev:
             p.distance_m = float(prev.distance_m)
         elif nxt:
             p.distance_m = float(nxt.distance_m)
 
 
-def enrich_cumulative_distance(points: list[ParsedTrackPoint]) -> list[ParsedTrackPoint]:
+def enrich_cumulative_distance(
+    points: list[ParsedTrackPoint],
+) -> list[ParsedTrackPoint]:
     """Post-normalization distance enrichment. Preserve monotonic source distances; fill GPS + sensor-only samples."""
     cumulative = 0.0
     prev_gps: ParsedTrackPoint | None = None
     prev_distance: float | None = None
     for p in points:
-        if prev_gps and p.lat is not None and p.lon is not None and prev_gps.lat is not None and prev_gps.lon is not None:
+        if (
+            prev_gps
+            and p.lat is not None
+            and p.lon is not None
+            and prev_gps.lat is not None
+            and prev_gps.lon is not None
+        ):
             cumulative += haversine_m(prev_gps.lat, prev_gps.lon, p.lat, p.lon)
-        source_ok = p.distance_m is not None and p.distance_m >= 0 and (prev_distance is None or p.distance_m >= prev_distance)
+        source_ok = (
+            p.distance_m is not None
+            and p.distance_m >= 0
+            and (prev_distance is None or p.distance_m >= prev_distance)
+        )
         if source_ok:
             cumulative = float(p.distance_m)
             prev_distance = cumulative
@@ -141,6 +163,7 @@ def enrich_cumulative_distance(points: list[ParsedTrackPoint]) -> list[ParsedTra
 class TrackPointsFileParser:
     parser_name = "TrackPointsFileParser"
     supported_extensions: set[str] = set()
+
     def parse(self, path: Path) -> list[ParsedTrackPoint]:
         raise NotImplementedError
 
@@ -158,7 +181,9 @@ class GpxTrackPointsParser(TrackPointsFileParser):
         for trkpt in raw.iter():
             if _strip(trkpt.tag) != "trkpt":
                 continue
-            p = ParsedTrackPoint(lat=_float(trkpt.attrib.get("lat")), lon=_float(trkpt.attrib.get("lon")))
+            p = ParsedTrackPoint(
+                lat=_float(trkpt.attrib.get("lat")), lon=_float(trkpt.attrib.get("lon"))
+            )
             for child in trkpt.iter():
                 name = _strip(child.tag).lower()
                 text = child.text.strip() if child.text else None
@@ -232,9 +257,14 @@ class FitTrackPointsParser(TrackPointsFileParser):
 
     def parse_file(self, path: Path) -> list[dict[str, Any]]:
         from fitparse import FitFile
+
         if path.name.endswith(".gz"):
-            with gzip.open(path, "rb") as src, tempfile.NamedTemporaryFile(suffix=".fit") as tmp:
-                tmp.write(src.read()); tmp.flush()
+            with (
+                gzip.open(path, "rb") as src,
+                tempfile.NamedTemporaryFile(suffix=".fit") as tmp,
+            ):
+                tmp.write(src.read())
+                tmp.flush()
                 fit = FitFile(tmp.name)
                 return [m.get_values() for m in fit.get_messages("record")]
         fit = FitFile(str(path))
@@ -252,16 +282,26 @@ class FitTrackPointsParser(TrackPointsFileParser):
             ts = row.get("timestamp")
             if isinstance(ts, datetime) and ts.tzinfo is None:
                 ts = ts.replace(tzinfo=timezone.utc)
-            speed = row.get("enhanced_speed") if row.get("enhanced_speed") is not None else row.get("speed")
+            speed = (
+                row.get("enhanced_speed")
+                if row.get("enhanced_speed") is not None
+                else row.get("speed")
+            )
             elev = normalize_elevation(row.get("enhanced_altitude"))
             if elev is None:
                 elev = normalize_elevation(row.get("altitude"))
-            points.append(ParsedTrackPoint(
-                timestamp=ts if isinstance(ts, datetime) else None,
-                lat=_float(lat), lon=_float(lon), elevation_m=elev,
-                distance_m=_float(row.get("distance")), heart_rate_bpm=_int(row.get("heart_rate")),
-                cadence_spm=normalize_cadence(_float(row.get("cadence"))), speed_mps=_float(speed),
-            ))
+            points.append(
+                ParsedTrackPoint(
+                    timestamp=ts if isinstance(ts, datetime) else None,
+                    lat=_float(lat),
+                    lon=_float(lon),
+                    elevation_m=elev,
+                    distance_m=_float(row.get("distance")),
+                    heart_rate_bpm=_int(row.get("heart_rate")),
+                    cadence_spm=normalize_cadence(_float(row.get("cadence"))),
+                    speed_mps=_float(speed),
+                )
+            )
         return points
 
     def parse(self, path: Path) -> list[ParsedTrackPoint]:
@@ -277,7 +317,7 @@ def suffix_key(path: Path) -> str:
     for ext in (".gpx.gz", ".tcx.gz", ".fit.gz", ".gpx", ".tcx", ".fit"):
         if name.endswith(ext):
             return ext
-    return ''.join(path.suffixes).lower()
+    return "".join(path.suffixes).lower()
 
 
 def get_parser(path: Path) -> TrackPointsFileParser:
@@ -298,7 +338,11 @@ def activity_title_from_file(path: Path) -> str | None:
                 if _strip(trk.tag) != "trk":
                     continue
                 for child in list(trk):
-                    if _strip(child.tag) == "name" and child.text and child.text.strip():
+                    if (
+                        _strip(child.tag) == "name"
+                        and child.text
+                        and child.text.strip()
+                    ):
                         return child.text.strip()
             for child in root.iter():
                 if _strip(child.tag) == "name" and child.text and child.text.strip():
@@ -309,7 +353,11 @@ def activity_title_from_file(path: Path) -> str | None:
                 if _strip(activity.tag) != "Activity":
                     continue
                 for child in list(activity):
-                    if _strip(child.tag) in {"Name", "Id"} and child.text and child.text.strip():
+                    if (
+                        _strip(child.tag) in {"Name", "Id"}
+                        and child.text
+                        and child.text.strip()
+                    ):
                         return child.text.strip()
         return None
     except Exception:

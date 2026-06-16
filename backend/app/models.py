@@ -29,7 +29,9 @@ class Activity(SQLModel, table=True):
     __tablename__ = "activities"
     __table_args__ = (
         UniqueConstraint("source_activity_id", name="uq_activities_source_activity_id"),
-        UniqueConstraint("fallback_dedupe_key", name="uq_activities_fallback_dedupe_key"),
+        UniqueConstraint(
+            "fallback_dedupe_key", name="uq_activities_fallback_dedupe_key"
+        ),
         Index("ix_activities_local_date", "local_date"),
     )
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -39,7 +41,9 @@ class Activity(SQLModel, table=True):
     source_filename: Optional[str] = None
     file_hash: Optional[str] = Field(default=None, index=True)
     title: str
-    description: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    description: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
     source_sport_type: str
     normalized_sport_type: str = "run"
     start_time_utc: Optional[datetime] = None
@@ -63,9 +67,13 @@ class Activity(SQLModel, table=True):
 
 class TrackPoint(SQLModel, table=True):
     __tablename__ = "track_points"
-    __table_args__ = (Index("ix_track_points_activity_index", "activity_id", "point_index"),)
+    __table_args__ = (
+        Index("ix_track_points_activity_index", "activity_id", "point_index"),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
-    activity_id: int = Field(foreign_key="activities.id", index=True, ondelete="CASCADE")
+    activity_id: int = Field(
+        foreign_key="activities.id", index=True, ondelete="CASCADE"
+    )
     point_index: int
     timestamp: Optional[datetime] = None
     elapsed_time_s: Optional[float] = None
@@ -80,9 +88,15 @@ class TrackPoint(SQLModel, table=True):
 
 class ActivitySplit(SQLModel, table=True):
     __tablename__ = "activity_splits"
-    __table_args__ = (Index("ix_activity_splits_activity", "activity_id", "split_type", "split_index"),)
+    __table_args__ = (
+        Index(
+            "ix_activity_splits_activity", "activity_id", "split_type", "split_index"
+        ),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
-    activity_id: int = Field(foreign_key="activities.id", index=True, ondelete="CASCADE")
+    activity_id: int = Field(
+        foreign_key="activities.id", index=True, ondelete="CASCADE"
+    )
     split_type: str = "km"
     split_index: int
     start_distance_m: float
@@ -112,9 +126,13 @@ class BestEffortDistance(SQLModel, table=True):
 
 class BestEffort(SQLModel, table=True):
     __tablename__ = "best_efforts"
-    __table_args__ = (Index("ix_best_efforts_distance_duration", "distance_m", "duration_s"),)
+    __table_args__ = (
+        Index("ix_best_efforts_distance_duration", "distance_m", "duration_s"),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
-    activity_id: int = Field(foreign_key="activities.id", index=True, ondelete="CASCADE")
+    activity_id: int = Field(
+        foreign_key="activities.id", index=True, ondelete="CASCADE"
+    )
     distance_m: float
     duration_s: float
     pace_s_per_km: float
@@ -131,7 +149,9 @@ class BestEffort(SQLModel, table=True):
 class ActivityRoute(SQLModel, table=True):
     __tablename__ = "activity_routes"
     id: Optional[int] = Field(default=None, primary_key=True)
-    activity_id: int = Field(foreign_key="activities.id", index=True, unique=True, ondelete="CASCADE")
+    activity_id: int = Field(
+        foreign_key="activities.id", index=True, unique=True, ondelete="CASCADE"
+    )
     simplified_points_json: list = Field(sa_column=Column(JSON))
     original_point_count: int
     simplified_point_count: int
@@ -141,8 +161,12 @@ class ActivityRoute(SQLModel, table=True):
 class ActivityImportDiagnostic(SQLModel, table=True):
     __tablename__ = "activity_import_diagnostics"
     id: Optional[int] = Field(default=None, primary_key=True)
-    import_job_id: int = Field(foreign_key="import_jobs.id", index=True, ondelete="CASCADE")
-    activity_id: Optional[int] = Field(default=None, foreign_key="activities.id", index=True, ondelete="SET NULL")
+    import_job_id: int = Field(
+        foreign_key="import_jobs.id", index=True, ondelete="CASCADE"
+    )
+    activity_id: Optional[int] = Field(
+        default=None, foreign_key="activities.id", index=True, ondelete="SET NULL"
+    )
     source_activity_id: Optional[str] = Field(default=None, index=True)
     source_filename: Optional[str] = None
     parser_name: Optional[str] = None
@@ -156,8 +180,16 @@ class ActivityImportDiagnostic(SQLModel, table=True):
     points_raw_count: Optional[int] = None
     points_normalized_count: Optional[int] = None
     points_cleaned_count: Optional[int] = None
-    fields_detected_json: Optional[list] = Field(default=None, sa_column=Column(JSON, nullable=True))
-    fields_dropped_json: Optional[list] = Field(default=None, sa_column=Column(JSON, nullable=True))
-    warnings_json: Optional[list] = Field(default=None, sa_column=Column(JSON, nullable=True))
-    error_message: Optional[str] = Field(default=None, sa_column=Column(Text, nullable=True))
+    fields_detected_json: Optional[list] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    fields_dropped_json: Optional[list] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    warnings_json: Optional[list] = Field(
+        default=None, sa_column=Column(JSON, nullable=True)
+    )
+    error_message: Optional[str] = Field(
+        default=None, sa_column=Column(Text, nullable=True)
+    )
     created_at: datetime = Field(default_factory=utcnow)

@@ -9,7 +9,11 @@ from sqlmodel import Session, delete, select
 from ..db import get_session
 from ..importer.derive import CleanPoint, generate_best_efforts
 from ..models import Activity, AppSetting, BestEffort, BestEffortDistance, TrackPoint
-from ..settings_defaults import DEFAULT_BEST_EFFORT_DISTANCES, DEFAULT_SETTINGS, deep_merge
+from ..settings_defaults import (
+    DEFAULT_BEST_EFFORT_DISTANCES,
+    DEFAULT_SETTINGS,
+    deep_merge,
+)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 SETTINGS_KEY = "global"
@@ -40,13 +44,21 @@ def seed_best_effort_distances(session: Session) -> None:
     if existing:
         return
     for i, (label, distance_m) in enumerate(DEFAULT_BEST_EFFORT_DISTANCES):
-        session.add(BestEffortDistance(label=label, distance_m=distance_m, enabled=True, sort_order=i))
+        session.add(
+            BestEffortDistance(
+                label=label, distance_m=distance_m, enabled=True, sort_order=i
+            )
+        )
     session.commit()
 
 
 def get_enabled_best_effort_distances(session: Session) -> list[BestEffortDistance]:
     seed_best_effort_distances(session)
-    return session.exec(select(BestEffortDistance).where(BestEffortDistance.enabled == True).order_by(BestEffortDistance.sort_order, BestEffortDistance.distance_m)).all()  # noqa: E712
+    return session.exec(
+        select(BestEffortDistance)
+        .where(BestEffortDistance.enabled == True)
+        .order_by(BestEffortDistance.sort_order, BestEffortDistance.distance_m)
+    ).all()  # noqa: E712
 
 
 def settings_with_defaults(value: dict[str, Any] | None) -> dict[str, Any]:
@@ -71,7 +83,11 @@ def get_settings(session: Session = Depends(get_session)):
 
 @router.put("")
 def put_settings(payload: dict[str, Any], session: Session = Depends(get_session)):
-    data = payload.get("settings") if isinstance(payload.get("settings"), dict) else payload
+    data = (
+        payload.get("settings")
+        if isinstance(payload.get("settings"), dict)
+        else payload
+    )
     merged = settings_with_defaults(data or {})
     row = session.get(AppSetting, SETTINGS_KEY)
     if row:
@@ -87,12 +103,18 @@ def put_settings(payload: dict[str, Any], session: Session = Depends(get_session
 @router.get("/best-effort-distances")
 def get_best_effort_distances(session: Session = Depends(get_session)):
     seed_best_effort_distances(session)
-    rows = session.exec(select(BestEffortDistance).order_by(BestEffortDistance.sort_order, BestEffortDistance.distance_m)).all()
+    rows = session.exec(
+        select(BestEffortDistance).order_by(
+            BestEffortDistance.sort_order, BestEffortDistance.distance_m
+        )
+    ).all()
     return rows
 
 
 @router.put("/best-effort-distances")
-def put_best_effort_distances(payload: BestEffortDistancesPayload, session: Session = Depends(get_session)):
+def put_best_effort_distances(
+    payload: BestEffortDistancesPayload, session: Session = Depends(get_session)
+):
     items = payload.distances
     seen: set[int] = set()
     out: list[BestEffortDistance] = []
@@ -107,7 +129,12 @@ def put_best_effort_distances(payload: BestEffortDistancesPayload, session: Sess
             row.enabled = True
             row.sort_order = item.sort_order if item.sort_order is not None else i
         else:
-            row = BestEffortDistance(label=label, distance_m=distance_m, enabled=True, sort_order=item.sort_order if item.sort_order is not None else i)
+            row = BestEffortDistance(
+                label=label,
+                distance_m=distance_m,
+                enabled=True,
+                sort_order=item.sort_order if item.sort_order is not None else i,
+            )
         session.add(row)
         out.append(row)
     existing = session.exec(select(BestEffortDistance)).all()
@@ -116,16 +143,36 @@ def put_best_effort_distances(payload: BestEffortDistancesPayload, session: Sess
         if row.id and row.id not in incoming_ids and row.id not in seen:
             session.delete(row)
     session.commit()
-    return session.exec(select(BestEffortDistance).order_by(BestEffortDistance.sort_order, BestEffortDistance.distance_m)).all()
+    return session.exec(
+        select(BestEffortDistance).order_by(
+            BestEffortDistance.sort_order, BestEffortDistance.distance_m
+        )
+    ).all()
 
 
 def _clean_points_for_activity(session: Session, activity_id: int) -> list[CleanPoint]:
-    rows = session.exec(select(TrackPoint).where(TrackPoint.activity_id == activity_id).order_by(TrackPoint.point_index)).all()
+    rows = session.exec(
+        select(TrackPoint)
+        .where(TrackPoint.activity_id == activity_id)
+        .order_by(TrackPoint.point_index)
+    ).all()
     points: list[CleanPoint] = []
     for p in rows:
         if p.elapsed_time_s is None or p.distance_m is None:
             continue
-        points.append(CleanPoint(timestamp=p.timestamp or _now(), elapsed_time_s=p.elapsed_time_s, distance_m=p.distance_m, lat=p.lat, lon=p.lon, elevation_m=p.elevation_m, heart_rate_bpm=p.heart_rate_bpm, cadence_spm=p.cadence_spm, speed_mps=p.speed_mps))
+        points.append(
+            CleanPoint(
+                timestamp=p.timestamp or _now(),
+                elapsed_time_s=p.elapsed_time_s,
+                distance_m=p.distance_m,
+                lat=p.lat,
+                lon=p.lon,
+                elevation_m=p.elevation_m,
+                heart_rate_bpm=p.heart_rate_bpm,
+                cadence_spm=p.cadence_spm,
+                speed_mps=p.speed_mps,
+            )
+        )
     return points
 
 

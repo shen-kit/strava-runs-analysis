@@ -4,6 +4,7 @@ Revision ID: 7c2a9f4d8b11
 Revises: 1d5793522c10
 Create Date: 2026-06-11 00:00:00.000000
 """
+
 from alembic import op
 import sqlalchemy as sa
 import sqlmodel
@@ -32,7 +33,12 @@ def upgrade() -> None:
         sa.Column("sort_order", sa.Integer(), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_best_effort_distances_distance_m"), "best_effort_distances", ["distance_m"], unique=False)
+    op.create_index(
+        op.f("ix_best_effort_distances_distance_m"),
+        "best_effort_distances",
+        ["distance_m"],
+        unique=False,
+    )
     defaults = [
         ("400m", 400.0),
         ("800m", 800.0),
@@ -45,11 +51,25 @@ def upgrade() -> None:
         ("Half marathon", 21097.5),
         ("Marathon", 42195.0),
     ]
-    table = sa.table("best_effort_distances", sa.column("label"), sa.column("distance_m"), sa.column("enabled"), sa.column("sort_order"))
-    op.bulk_insert(table, [{"label": label, "distance_m": distance, "enabled": True, "sort_order": i} for i, (label, distance) in enumerate(defaults)])
+    table = sa.table(
+        "best_effort_distances",
+        sa.column("label"),
+        sa.column("distance_m"),
+        sa.column("enabled"),
+        sa.column("sort_order"),
+    )
+    op.bulk_insert(
+        table,
+        [
+            {"label": label, "distance_m": distance, "enabled": True, "sort_order": i}
+            for i, (label, distance) in enumerate(defaults)
+        ],
+    )
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_best_effort_distances_distance_m"), table_name="best_effort_distances")
+    op.drop_index(
+        op.f("ix_best_effort_distances_distance_m"), table_name="best_effort_distances"
+    )
     op.drop_table("best_effort_distances")
     op.drop_table("app_settings")

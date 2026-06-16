@@ -6,8 +6,15 @@ from .config import get_settings
 
 settings = get_settings()
 if settings.database_url.startswith("sqlite:///./"):
-    Path(settings.database_url.replace("sqlite:///./", "")).parent.mkdir(parents=True, exist_ok=True)
-engine = create_engine(settings.database_url, connect_args={"check_same_thread": False} if settings.database_url.startswith("sqlite") else {})
+    Path(settings.database_url.replace("sqlite:///./", "")).parent.mkdir(
+        parents=True, exist_ok=True
+    )
+engine = create_engine(
+    settings.database_url,
+    connect_args={"check_same_thread": False}
+    if settings.database_url.startswith("sqlite")
+    else {},
+)
 
 
 @event.listens_for(engine, "connect")

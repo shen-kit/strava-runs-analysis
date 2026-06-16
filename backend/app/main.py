@@ -5,10 +5,18 @@ from .api import activities, imports, settings as settings_api, stats
 from .config import get_settings
 from .db import init_db
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
+)
 settings = get_settings()
 app = FastAPI(title="Running Tracker API")
-app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_credentials=False, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
@@ -18,7 +26,8 @@ def startup():
 
 @app.get("/health")
 def health():
-    return {"status":"ok"}
+    return {"status": "ok"}
+
 
 app.include_router(imports.router)
 app.include_router(activities.router)
