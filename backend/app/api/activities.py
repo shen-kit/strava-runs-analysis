@@ -1,9 +1,10 @@
 from __future__ import annotations
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from sqlalchemy import func
+from sqlmodel import Session, delete, select
 from ..db import get_session
-from ..models import Activity, ActivityRoute, ActivitySplit, BestEffort, TrackPoint
+from ..models import Activity, ActivityRoute, ActivitySplit, BestEffort, ImportJob, TrackPoint
 from ..importer.derive import clean_points, computed_distance_m, generate_best_efforts, generate_splits, mean, simplify_route
 from ..importer.parsers import ParsedTrackPoint
 from .stream_utils import build_streams, downsample_streams, with_cumulative_distance
@@ -55,6 +56,17 @@ def list_activities(
     return [activity_summary(a) for a in rows[offset:offset+limit]]
 
 
+@router.delete("")
+def delete_all_activities(session: Session = Depends(get_session)):
+    active_job = session.exec(select(ImportJob).where(ImportJob.status.in_(["pending", "processing"]))).first()
+    if active_job:
+        raise HTTPException(status_code=409, detail="Cannot delete activities while an import job is pending or processing")
+    deleted_count = session.exec(select(func.count()).select_from(Activity)).one()
+    session.exec(delete(Activity))
+    session.commit()
+    return {"status": "deleted", "deleted_count": deleted_count}
+
+
 @router.get("/{activity_id}")
 def get_activity(activity_id: int, session: Session = Depends(get_session)):
     return activity_summary(activity_or_404(session, activity_id))
@@ -66,11 +78,6 @@ def _delete_derived(session: Session, activity_id: int) -> None:
             session.delete(obj)
     session.flush()
 
-
-def _delete_activity_rows(session: Session, activity_id: int) -> None:
-    for cls in (TrackPoint, ActivitySplit, BestEffort, ActivityRoute):
-        for obj in session.exec(select(cls).where(cls.activity_id == activity_id)).all():
-            session.delete(obj)
 
 
 def _moving_time_s(cleaned) -> float | None:
@@ -93,7 +100,6 @@ def _elevation_gain_m(cleaned) -> float | None:
 @router.delete("/{activity_id}")
 def delete_activity(activity_id: int, session: Session = Depends(get_session)):
     activity = activity_or_404(session, activity_id)
-    _delete_activity_rows(session, activity_id)
     session.delete(activity)
     session.commit()
     return {"status": "deleted", "activity_id": activity_id}

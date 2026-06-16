@@ -13,6 +13,12 @@ export default function ImportPage() {
   const qc = useQueryClient();
   const uploadZip = useMutation({ mutationFn: api.uploadZip, onSuccess: (r) => setJobId(r.id) });
   const uploadFiles = useMutation({ mutationFn: api.uploadActivityFiles, onSuccess: (r) => setJobId(r.id) });
+  const deleteAllActivities = useMutation({ mutationFn: api.deleteAllActivities, onSuccess: () => {
+    qc.invalidateQueries({ queryKey: ["stats"] });
+    qc.invalidateQueries({ queryKey: ["activities"] });
+    qc.invalidateQueries({ queryKey: ["imports"] });
+    qc.invalidateQueries({ queryKey: ["import"] });
+  } });
   const jobs = useQuery({ queryKey: ["imports", "recent"], queryFn: () => api.importJobs(10), refetchInterval: (q) => q.state.data?.some((j) => j.status === "pending" || j.status === "processing") ? 3000 : false });
   const job = useQuery({ queryKey: ["import", jobId], queryFn: () => api.importJob(jobId!), enabled: jobId != null, refetchInterval: (q) => {
     const s = q.state.data?.status; return s === "pending" || s === "processing" ? 3000 : false;
@@ -32,9 +38,14 @@ export default function ImportPage() {
   function droppedFiles(e: DragEvent) { e.preventDefault(); return Array.from(e.dataTransfer.files ?? []); }
   function dropZip(e: DragEvent) { const file = droppedFiles(e).find((f) => f.name.toLowerCase().endsWith(".zip")); if (file) { setZipFile(file); uploadZip.mutate({ file }); } }
   function dropActivities(e: DragEvent) { const files = droppedFiles(e).filter((f) => /\.(gpx|tcx|fit)(\.gz)?$/i.test(f.name)); if (files.length) { setActivityFiles(files); uploadFiles.mutate(files); } }
+  function confirmDeleteAll() {
+    if (window.confirm("Delete all activities? This removes activities, routes, track points, splits, and best efforts. Settings and import job history are kept.")) deleteAllActivities.mutate();
+  }
+  const activeImport = jobs.data?.some((j) => j.status === "pending" || j.status === "processing") ?? false;
   const rows = job.data ? Object.entries(job.data).filter(([k]) => !["error_message", "diagnostics"].includes(k)) : [];
   return <main className="page-shell-narrow page-stack">
-    <div className="page-header"><div><h1 className="page-title">Import activities</h1><p className="page-subtitle">Upload a Strava export ZIP or individual GPX, TCX, FIT activity files.</p></div></div>
+    <div className="page-header"><div><h1 className="page-title">Import activities</h1><p className="page-subtitle">Upload a Strava export ZIP or individual GPX, TCX, FIT activity files.</p></div><button className="btn btn-danger" onClick={confirmDeleteAll} disabled={deleteAllActivities.isPending || activeImport}>{deleteAllActivities.isPending ? "Deleting…" : "Delete all activities"}</button></div>
+    {deleteAllActivities.error && <div className="error-state">{String(deleteAllActivities.error)}</div>}
 
     <section className="card page-stack import-drop-zone" onDragOver={(e) => e.preventDefault()} onDrop={dropZip}>
       <div className="section-heading"><div><h2 className="section-title">Upload Strava ZIP</h2><p className="section-subtitle">Import a full Strava export archive. Drop a ZIP here to start importing.</p></div></div>

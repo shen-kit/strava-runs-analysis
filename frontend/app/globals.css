@@ -133,6 +133,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .btn:focus-visible, .input:focus, .select:focus { outline: 2px solid color-mix(in srgb, var(--accent) 35%, transparent); outline-offset: 2px; }
 .btn-primary { border-color: var(--accent); background: var(--accent); color: var(--accent-foreground); }
 .btn-primary:hover { background: color-mix(in srgb, var(--accent) 88%, black); }
+.btn-danger { border-color: var(--danger); background: var(--danger); color: white; }
+.btn-danger:hover { background: color-mix(in srgb, var(--danger) 88%, black); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
 .btn-active { border-color: var(--accent); background: var(--accent); color: var(--accent-foreground); }
 .btn-ghost { background: transparent; box-shadow: none; }
 .btn-sm { min-height: 2rem; padding: 0.35rem 0.65rem; font-size: 0.8rem; }
