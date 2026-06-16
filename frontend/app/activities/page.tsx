@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
 import { api, type Activity } from "@/src/lib/api";
 import { ActivityActionsMenu } from "@/src/components/ActivityActionsMenu";
 import { formatDistance, formatDuration, formatElevation, formatPace, formatDate } from "@/src/lib/format";
@@ -17,28 +17,29 @@ export default function ActivitiesPage() {
   const [dateTo, setDateTo] = useState("");
   const [sort, setSort] = useState<SortKey>("date");
   const [direction, setDirection] = useState<SortDirection>("desc");
-  const [page, setPage] = useState(1);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-  const params = useMemo(() => {
-    const p = new URLSearchParams({ limit: String(PAGE_SIZE * page), offset: "0", sort, direction });
-    if (dateFrom) p.set("date_from", dateFrom);
-    if (dateTo) p.set("date_to", dateTo);
-    return p.toString();
-  }, [page, sort, direction, dateFrom, dateTo]);
-  const q = useQuery({ queryKey: ["activities", params], queryFn: () => api.activities(params) });
-  const rows = q.data ?? [];
-  const hasMore = rows.length === PAGE_SIZE * page;
+  const q = useInfiniteQuery({
+    queryKey: ["activities", { sort, direction, dateFrom, dateTo }],
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => {
+      const p = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(pageParam), sort, direction });
+      if (dateFrom) p.set("date_from", dateFrom);
+      if (dateTo) p.set("date_to", dateTo);
+      return api.activities(p.toString());
+    },
+    getNextPageParam: (lastPage, allPages) => lastPage.length === PAGE_SIZE ? allPages.length * PAGE_SIZE : undefined,
+  });
+  const rows = useMemo(() => q.data?.pages.flat() ?? [], [q.data]);
 
-  useEffect(() => { setPage(1); }, [sort, direction, dateFrom, dateTo]);
   useEffect(() => {
     const node = sentinelRef.current;
     if (!node) return;
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && hasMore && !q.isFetching) setPage((p) => p + 1);
+      if (entry.isIntersecting && q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage();
     }, { rootMargin: "300px" });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, q.isFetching]);
+  }, [q.hasNextPage, q.isFetchingNextPage, q.fetchNextPage]);
 
   const uploadZip = useMutation({ mutationFn: api.uploadZip, onSuccess: (r) => router.push(`/import?jobId=${r.id}`) });
   const uploadFiles = useMutation({ mutationFn: api.uploadActivityFiles, onSuccess: (r) => router.push(`/import?jobId=${r.id}`) });
@@ -73,7 +74,7 @@ export default function ActivitiesPage() {
         <div className="mobile-sortbar"><label className="settings-field"><span>Sort</span><select className="select" value={`${sort}:${direction}`} onChange={(e) => setSortSelect(e.target.value)}><option value="date:desc">Date newest</option><option value="date:asc">Date oldest</option><option value="distance:desc">Distance longest</option><option value="distance:asc">Distance shortest</option><option value="time:desc">Duration longest</option><option value="time:asc">Duration shortest</option><option value="pace:asc">Pace fastest</option><option value="pace:desc">Pace slowest</option></select></label></div>
         <div className="table-wrap responsive-table-desktop"><table className="table"><thead><tr><th><SortButton label="Date" column="date" sort={sort} direction={direction} onClick={setSortKey} /></th><th>Title</th><th><SortButton label="Distance" column="distance" sort={sort} direction={direction} onClick={setSortKey} /></th><th><SortButton label="Duration" column="time" sort={sort} direction={direction} onClick={setSortKey} /></th><th><SortButton label="Pace" column="pace" sort={sort} direction={direction} onClick={setSortKey} /></th><th>Elev</th><th>HR</th><th className="actions-cell"><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((a) => <ActivityRow key={a.id} activity={a} />)}</tbody></table></div>
         <div className="mobile-card-list">{rows.map((a) => <ActivityCard key={a.id} activity={a} />)}</div>
-        <div ref={sentinelRef} className="status mt-4 text-center">{q.isFetching && !q.isLoading ? "Loading more…" : hasMore ? "Scroll for more" : `All activities loaded (${rows.length})`}</div>
+        <div ref={sentinelRef} className="status mt-4 text-center">{q.isFetchingNextPage ? "Loading more…" : q.hasNextPage ? "Scroll for more" : `All activities loaded (${rows.length})`}</div>
       </>}
     </section>
   </main>;
