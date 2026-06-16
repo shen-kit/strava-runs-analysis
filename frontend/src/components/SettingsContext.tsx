@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type AppSettings, type BestEffortDistanceSetting, type DashboardSectionKey, type Zone } from "@/src/lib/api";
 
@@ -63,16 +63,17 @@ type SettingsContextValue = {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
-  const [settings, setSettings] = useState<AppSettings>(fallbackSettings);
-  const [distances, setDistances] = useState<BestEffortDistanceSetting[]>([]);
+  const [settingsOverride, setSettingsOverride] = useState<AppSettings | null>(null);
+  const [distancesOverride, setDistancesOverride] = useState<BestEffortDistanceSetting[] | null>(null);
   const [isOpen, setIsOpen] = useState(false);
   const settingsQuery = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const distancesQuery = useQuery({ queryKey: ["settings", "best-effort-distances"], queryFn: api.bestEffortDistances });
+  const serverSettings = useMemo(() => settingsQuery.data ? normalizeSettings(settingsQuery.data) : fallbackSettings, [settingsQuery.data]);
+  const serverDistances = useMemo(() => distancesQuery.data?.map((d) => ({ ...d, enabled: true })) ?? [], [distancesQuery.data]);
+  const settings = settingsOverride ?? serverSettings;
+  const distances = distancesOverride ?? serverDistances;
 
-  useEffect(() => { if (settingsQuery.data) setSettings(normalizeSettings(settingsQuery.data)); }, [settingsQuery.data]);
-  useEffect(() => { if (distancesQuery.data) setDistances(distancesQuery.data.map((d) => ({ ...d, enabled: true }))); }, [distancesQuery.data]);
-
-  const value = useMemo(() => ({ settings, setSettings, distances, setDistances, isOpen, open: () => setIsOpen(true), close: () => setIsOpen(false), loading: settingsQuery.isLoading || distancesQuery.isLoading }), [settings, distances, isOpen, settingsQuery.isLoading, distancesQuery.isLoading]);
+  const value = useMemo(() => ({ settings, setSettings: setSettingsOverride, distances, setDistances: setDistancesOverride, isOpen, open: () => setIsOpen(true), close: () => setIsOpen(false), loading: settingsQuery.isLoading || distancesQuery.isLoading }), [settings, distances, isOpen, settingsQuery.isLoading, distancesQuery.isLoading]);
   return <SettingsContext.Provider value={value}>{children}<SettingsSidebar /></SettingsContext.Provider>;
 }
 
@@ -150,5 +151,5 @@ function SettingsSidebar() {
 function SettingsGroup({ title, children }: { title: string; children: React.ReactNode }) { return <section className="settings-group"><h3>{title}</h3>{children}</section>; }
 function NumberField({ label, value, onChange }: { label: string; value: number; onChange: (value: number) => void }) { return <label className="settings-field"><span>{label}</span><input className="input" type="number" min="0" value={value} onChange={(e) => onChange(Number(e.target.value))} /></label>; }
 function HeartRateZoneEditor({ zones, onAdd, onRemove, onChange }: { zones: Zone[]; onAdd: () => void; onRemove: (index: number) => void; onChange: (index: number, patch: Partial<Zone>) => void }) { return <div className="settings-zone"><div className="settings-zone-title"><b>Heart rate zones</b><button className="btn btn-sm" onClick={onAdd}>Add</button></div><div className="settings-row settings-row-zone settings-table-head"><span>Zone</span><span>Min (bpm)</span><span>Max (bpm)</span><span className="settings-action-spacer">Delete</span></div>{normalizeHeartZones(zones).map((z, i) => <div className="settings-row settings-row-zone" key={`heart-${i}`}><input className="input zone-name" value={z.label} onChange={(e) => onChange(i, { label: e.target.value })} /><input className="input zone-value" value={`${z.min}–`} readOnly aria-label="Calculated minimum" /><input className="input zone-value" type="number" value={z.max} aria-label="Maximum heart rate" onChange={(e) => onChange(i, { max: Number(e.target.value) })} /><button className="btn btn-sm" onClick={() => onRemove(i)}>Delete</button></div>)}</div>; }
-function PaceZoneEditor({ zones, onAdd, onRemove, onChange }: { zones: Zone[]; onAdd: () => void; onRemove: (index: number) => void; onChange: (index: number, patch: Partial<Zone>) => void }) { const normalized = normalizePaceZones(zones); return <div className="settings-zone"><div className="settings-zone-title"><b>Pace zones</b><button className="btn btn-sm" onClick={onAdd}>Add</button></div><div className="settings-row settings-row-zone settings-table-head"><span>Zone</span><span>Min (min/km)</span><span>Max (min/km)</span><span className="settings-action-spacer">Delete</span></div>{normalized.map((z, i) => <div className="settings-row settings-row-zone" key={`pace-${i}`}><input className="input zone-name" value={z.label} onChange={(e) => onChange(i, { label: e.target.value })} /><PaceInput seconds={z.min} ariaLabel="Minimum pace" onCommit={(value) => onChange(i, { min: value })} /><input className="input zone-value" value={secondsToPace(z.max)} readOnly aria-label="Calculated maximum pace" /><button className="btn btn-sm" onClick={() => onRemove(i)}>Delete</button></div>)}</div>; }
-function PaceInput({ seconds, ariaLabel, onCommit }: { seconds: number; ariaLabel: string; onCommit: (seconds: number) => void }) { const [value, setValue] = useState(secondsToPace(seconds)); useEffect(() => setValue(secondsToPace(seconds)), [seconds]); return <input className="input zone-value" value={value} aria-label={ariaLabel} onChange={(e) => setValue(e.target.value)} onBlur={() => { const next = paceToSeconds(value); setValue(secondsToPace(next)); onCommit(next); }} />; }
+function PaceZoneEditor({ zones, onAdd, onRemove, onChange }: { zones: Zone[]; onAdd: () => void; onRemove: (index: number) => void; onChange: (index: number, patch: Partial<Zone>) => void }) { const normalized = normalizePaceZones(zones); return <div className="settings-zone"><div className="settings-zone-title"><b>Pace zones</b><button className="btn btn-sm" onClick={onAdd}>Add</button></div><div className="settings-row settings-row-zone settings-table-head"><span>Zone</span><span>Min (min/km)</span><span>Max (min/km)</span><span className="settings-action-spacer">Delete</span></div>{normalized.map((z, i) => <div className="settings-row settings-row-zone" key={`pace-${i}`}><input className="input zone-name" value={z.label} onChange={(e) => onChange(i, { label: e.target.value })} /><PaceInput key={`${i}-${z.min}`} seconds={z.min} ariaLabel="Minimum pace" onCommit={(value) => onChange(i, { min: value })} /><input className="input zone-value" value={secondsToPace(z.max)} readOnly aria-label="Calculated maximum pace" /><button className="btn btn-sm" onClick={() => onRemove(i)}>Delete</button></div>)}</div>; }
+function PaceInput({ seconds, ariaLabel, onCommit }: { seconds: number; ariaLabel: string; onCommit: (seconds: number) => void }) { const [value, setValue] = useState(secondsToPace(seconds)); return <input className="input zone-value" value={value} aria-label={ariaLabel} onChange={(e) => setValue(e.target.value)} onBlur={() => { const next = paceToSeconds(value); setValue(secondsToPace(next)); onCommit(next); }} />; }

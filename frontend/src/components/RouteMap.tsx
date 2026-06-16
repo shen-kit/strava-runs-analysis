@@ -92,10 +92,10 @@ export function RouteMap({ activityId, points }: { activityId: number; points: R
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<Map | null>(null);
   const tooltipRef = useRef<Popup | null>(null);
-  const [mode, setMode] = useState<ColourMode>(settings.maps.defaultOverlay);
-  const [mapType, setMapType] = useState<MapStyleId>(settings.maps.defaultMapType);
-  useEffect(() => { setMode(settings.maps.defaultOverlay); }, [settings.maps.defaultOverlay]);
-  useEffect(() => { setMapType(settings.maps.defaultMapType); }, [settings.maps.defaultMapType]);
+  const [modeOverride, setModeOverride] = useState<ColourMode | null>(null);
+  const [mapTypeOverride, setMapTypeOverride] = useState<MapStyleId | null>(null);
+  const mode = modeOverride ?? settings.maps.defaultOverlay;
+  const mapType = mapTypeOverride ?? settings.maps.defaultMapType;
   const route = useMemo(() => validPoints(points ?? []), [points]);
   const queryMetric: RouteOverlayMetric = mode === "none" ? "pace" : mode;
   const overlay = useQuery({
@@ -194,14 +194,14 @@ export function RouteMap({ activityId, points }: { activityId: number; points: R
     <div className="map-shell">
       <div ref={containerRef} className="map-canvas" />
       <div className="map-select grid gap-2">
-        <select value={mode} onChange={(e) => setMode(e.target.value as ColourMode)} className="select map-overlay text-sm">
+        <select value={mode} onChange={(e) => setModeOverride(e.target.value as ColourMode)} className="select map-overlay text-sm">
           <option value="none">Default</option>
           <option value="pace">Pace</option>
           <option value="heart_rate" disabled={overlay.data ? !overlay.data.has_heart_rate : false}>Heart rate</option>
           <option value="gradient">Hill gradient</option>
           <option value="cadence" disabled={overlay.data ? !overlay.data.has_cadence : false}>Cadence</option>
         </select>
-        <select value={mapType} onChange={(e) => setMapType(e.target.value as MapStyleId)} className="select map-overlay text-sm">
+        <select value={mapType} onChange={(e) => setMapTypeOverride(e.target.value as MapStyleId)} className="select map-overlay text-sm">
           {mapStyleEntries.map(([id, style]) => <option key={id} value={id} disabled={!style.tileUrl}>{style.label}</option>)}
         </select>
       </div>

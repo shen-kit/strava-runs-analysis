@@ -30,16 +30,17 @@ export default function ActivitiesPage() {
     getNextPageParam: (lastPage, allPages) => lastPage.length === PAGE_SIZE ? allPages.length * PAGE_SIZE : undefined,
   });
   const rows = useMemo(() => q.data?.pages.flat() ?? [], [q.data]);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = q;
 
   useEffect(() => {
     const node = sentinelRef.current;
     if (!node) return;
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting && q.hasNextPage && !q.isFetchingNextPage) q.fetchNextPage();
+      if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) fetchNextPage();
     }, { rootMargin: "300px" });
     observer.observe(node);
     return () => observer.disconnect();
-  }, [q.hasNextPage, q.isFetchingNextPage, q.fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const uploadZip = useMutation({ mutationFn: api.uploadZip, onSuccess: (r) => router.push(`/import?jobId=${r.id}`) });
   const uploadFiles = useMutation({ mutationFn: api.uploadActivityFiles, onSuccess: (r) => router.push(`/import?jobId=${r.id}`) });
@@ -74,7 +75,7 @@ export default function ActivitiesPage() {
         <div className="mobile-sortbar"><label className="settings-field"><span>Sort</span><select className="select" value={`${sort}:${direction}`} onChange={(e) => setSortSelect(e.target.value)}><option value="date:desc">Date newest</option><option value="date:asc">Date oldest</option><option value="distance:desc">Distance longest</option><option value="distance:asc">Distance shortest</option><option value="time:desc">Duration longest</option><option value="time:asc">Duration shortest</option><option value="pace:asc">Pace fastest</option><option value="pace:desc">Pace slowest</option></select></label></div>
         <div className="table-wrap responsive-table-desktop"><table className="table"><thead><tr><th><SortButton label="Date" column="date" sort={sort} direction={direction} onClick={setSortKey} /></th><th>Title</th><th><SortButton label="Distance" column="distance" sort={sort} direction={direction} onClick={setSortKey} /></th><th><SortButton label="Duration" column="time" sort={sort} direction={direction} onClick={setSortKey} /></th><th><SortButton label="Pace" column="pace" sort={sort} direction={direction} onClick={setSortKey} /></th><th>Elev</th><th>HR</th><th className="actions-cell"><span className="sr-only">Actions</span></th></tr></thead><tbody>{rows.map((a) => <ActivityRow key={a.id} activity={a} />)}</tbody></table></div>
         <div className="mobile-card-list">{rows.map((a) => <ActivityCard key={a.id} activity={a} />)}</div>
-        <div ref={sentinelRef} className="status mt-4 text-center">{q.isFetchingNextPage ? "Loading more…" : q.hasNextPage ? "Scroll for more" : `All activities loaded (${rows.length})`}</div>
+        <div ref={sentinelRef} className="status mt-4 text-center">{isFetchingNextPage ? "Loading more…" : hasNextPage ? "Scroll for more" : `All activities loaded (${rows.length})`}</div>
       </>}
     </section>
   </main>;

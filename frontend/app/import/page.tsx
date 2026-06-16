@@ -1,18 +1,23 @@
 "use client";
-import { DragEvent, FormEvent, useEffect, useState } from "react";
+import { DragEvent, FormEvent, Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, type ImportDiagnostic } from "@/src/lib/api";
 import { formatDistance, formatDuration, formatDate } from "@/src/lib/format";
 
-export default function ImportPage() {
+export default function ImportPage() { return <Suspense fallback={<main className="page-shell-narrow page-stack"><div className="status">Loading import page…</div></main>}><ImportPageContent /></Suspense>; }
+
+function ImportPageContent() {
   const [zipFile, setZipFile] = useState<File | null>(null);
   const [activityFiles, setActivityFiles] = useState<File[]>([]);
-  const [jobId, setJobId] = useState<number | null>(null);
+  const searchParams = useSearchParams();
+  const routeJobId = Number(searchParams.get("jobId")) || null;
+  const [uploadedJobId, setUploadedJobId] = useState<number | null>(null);
   const [forceMode, setForceMode] = useState<"none" | "all" | "extensions">("none");
   const [extensions, setExtensions] = useState<string[]>([]);
   const qc = useQueryClient();
-  const uploadZip = useMutation({ mutationFn: api.uploadZip, onSuccess: (r) => setJobId(r.id) });
-  const uploadFiles = useMutation({ mutationFn: api.uploadActivityFiles, onSuccess: (r) => setJobId(r.id) });
+  const uploadZip = useMutation({ mutationFn: api.uploadZip, onSuccess: (r) => setUploadedJobId(r.id) });
+  const uploadFiles = useMutation({ mutationFn: api.uploadActivityFiles, onSuccess: (r) => setUploadedJobId(r.id) });
   const deleteAllActivities = useMutation({ mutationFn: api.deleteAllActivities, onSuccess: () => {
     qc.invalidateQueries({ queryKey: ["stats"] });
     qc.invalidateQueries({ queryKey: ["activities"] });
@@ -20,11 +25,11 @@ export default function ImportPage() {
     qc.invalidateQueries({ queryKey: ["import"] });
   } });
   const jobs = useQuery({ queryKey: ["imports", "recent"], queryFn: () => api.importJobs(10), refetchInterval: (q) => q.state.data?.some((j) => j.status === "pending" || j.status === "processing") ? 3000 : false });
+  const jobId = uploadedJobId ?? routeJobId;
   const job = useQuery({ queryKey: ["import", jobId], queryFn: () => api.importJob(jobId!), enabled: jobId != null, refetchInterval: (q) => {
     const s = q.state.data?.status; return s === "pending" || s === "processing" ? 3000 : false;
   }});
   const status = job.data?.status;
-  useEffect(() => { const id = Number(new URLSearchParams(window.location.search).get("jobId")); if (id) setJobId(id); }, []);
   useEffect(() => { if (status === "completed") { qc.invalidateQueries({ queryKey: ["stats"] }); qc.invalidateQueries({ queryKey: ["activities"] }); qc.invalidateQueries({ queryKey: ["imports"] }); } }, [status, qc]);
   function toggleExtension(ext: string) { setExtensions((xs) => xs.includes(ext) ? xs.filter((x) => x !== ext) : [...xs, ext]); }
   function submitZip(e: FormEvent) {
@@ -72,7 +77,7 @@ export default function ImportPage() {
 
     {!!jobs.data?.length && <section className="card">
       <div className="section-heading"><div><h2 className="section-title">Recent import jobs</h2><p className="section-subtitle">Ongoing imports continue to update here.</p></div></div>
-      <div className="table-wrap"><table className="table"><thead><tr><th>Job</th><th>Status</th><th>Processed</th><th>New</th><th>Skipped</th><th>Failed</th></tr></thead><tbody>{jobs.data.map((j) => <tr key={j.id} onClick={() => j.id && setJobId(j.id)} className="clickable-row"><td>#{j.id}</td><td>{j.status}</td><td>{j.processed_count}/{j.run_activities_seen}</td><td>{j.new_count}</td><td>{j.skipped_count}</td><td>{j.failed_count}</td></tr>)}</tbody></table></div>
+      <div className="table-wrap"><table className="table"><thead><tr><th>Job</th><th>Status</th><th>Processed</th><th>New</th><th>Skipped</th><th>Failed</th></tr></thead><tbody>{jobs.data.map((j) => <tr key={j.id} onClick={() => j.id && setUploadedJobId(j.id)} className="clickable-row"><td>#{j.id}</td><td>{j.status}</td><td>{j.processed_count}/{j.run_activities_seen}</td><td>{j.new_count}</td><td>{j.skipped_count}</td><td>{j.failed_count}</td></tr>)}</tbody></table></div>
     </section>}
 
     {jobId && <section className="card">

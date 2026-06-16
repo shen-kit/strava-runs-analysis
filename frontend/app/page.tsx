@@ -1,6 +1,6 @@
 "use client";
 import type { ReactElement, ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, Tooltip, XAxis, YAxis } from "recharts";
@@ -65,10 +65,11 @@ export default function Home() {
   const enabledDistances = useMemo(() => distances.filter((d) => d.enabled).sort((a, b) => (a.sort_order - b.sort_order) || (a.distance_m - b.distance_m)), [distances]);
   const defaultBucket = settings.dashboard.defaultBucket;
   const defaultRange = settings.dashboard.defaultTimeRange;
-  const [bucket, setBucket] = useState<Bucket>(defaultBucket);
-  const [range, setRange] = useState(defaultRange);
+  const [bucketOverride, setBucketOverride] = useState<Bucket | null>(null);
+  const [rangeOverride, setRangeOverride] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
-  useEffect(() => { setBucket(defaultBucket); setRange(defaultRange); setOffset(0); }, [defaultBucket, defaultRange]);
+  const bucket = bucketOverride ?? defaultBucket;
+  const range = rangeOverride ?? defaultRange;
   const visible = settings.dashboard.visibleSections;
   const keys = useMemo(() => buildKeys(bucket, offset, range), [bucket, offset, range]);
   const trendDistances = enabledDistances.map((d) => d.distance_m).join(",");
@@ -83,7 +84,7 @@ export default function Home() {
   const elevation = useQuery({ queryKey: ["stats", "elevation", bucket], queryFn: () => api.elevation(bucket) });
   const distribution = useQuery({ queryKey: ["stats", "distance-distribution"], queryFn: api.distanceDistribution });
   const recent = useQuery({ queryKey: ["activities", "recent"], queryFn: () => api.activities("limit=15") });
-  function setB(b: Bucket) { setBucket(b); setOffset(0); }
+  function setB(b: Bucket) { setBucketOverride(b); setOffset(0); }
 
   const volumeRows = useMemo(() => fillTotals(totals.data, keys), [totals.data, keys]);
   const effortRows = useMemo(() => buildEffortRows(effortTrend.data ?? [], keys, bucket), [effortTrend.data, keys, bucket]);
@@ -102,7 +103,7 @@ export default function Home() {
         <button className={`btn btn-sm ${bucket==="week" ? "btn-active" : ""}`} onClick={() => setB("week")}>Week</button>
         <button className={`btn btn-sm ${bucket==="month" ? "btn-active" : ""}`} onClick={() => setB("month")}>Month</button>
         <button className={`btn btn-sm ${bucket==="year" ? "btn-active" : ""}`} onClick={() => setB("year")}>Year</button>
-        <select className="select select-sm" value={range} onChange={(e) => { setRange(e.target.value); setOffset(0); }}><option value="3mo">3mo</option><option value="6mo">6mo</option><option value="1y">1y</option><option value="2y">2y</option><option value="5y">5y</option></select>
+        <select className="select select-sm" value={range} onChange={(e) => { setRangeOverride(e.target.value); setOffset(0); }}><option value="3mo">3mo</option><option value="6mo">6mo</option><option value="1y">1y</option><option value="2y">2y</option><option value="5y">5y</option></select>
         <button className="btn btn-sm" onClick={() => setOffset(0)}>Today</button>
         <button className="btn btn-sm" onClick={() => setOffset(offset+1)} disabled={offset>=0}>→</button>
       </div>
