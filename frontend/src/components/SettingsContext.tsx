@@ -14,6 +14,8 @@ const sectionLabels: Record<DashboardSectionKey, string> = {
   paceTrend: "Pace trend",
   elevationTrend: "Elevation trend",
   distanceDistribution: "Distance distribution",
+  heartRateZones: "Heart-rate zones",
+  paceZones: "Pace zones",
   recentRuns: "Recent runs",
 };
 const sectionKeys = Object.keys(sectionLabels) as DashboardSectionKey[];

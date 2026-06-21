@@ -4,8 +4,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select
 from ..db import get_session
-from ..models import Activity, BestEffort
-from .settings import get_enabled_best_effort_distances
+from ..models import Activity, AppSetting, BestEffort, TrackPoint
+from .settings import SETTINGS_KEY, get_enabled_best_effort_distances, settings_with_defaults
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -33,6 +33,62 @@ def activity_distance_m(a: Activity) -> float:
 
 def activity_duration_s(a: Activity) -> float:
     return a.moving_time_s if a.moving_time_s is not None else (a.elapsed_time_s or 0)
+
+
+def get_training_zones(session: Session, metric: str) -> list[dict]:
+    row = session.get(AppSetting, SETTINGS_KEY)
+    settings = settings_with_defaults(row.value_json if row else None)
+    key = "heartRate" if metric == "heart_rate" else "pace"
+    return settings.get("trainingZones", {}).get(key, [])
+
+
+def zone_index(value: float | None, zones: list[dict]) -> int | None:
+    if value is None:
+        return None
+    for i, zone in enumerate(zones):
+        lo = float(zone.get("min", float("-inf")))
+        hi = float(zone.get("max", float("inf")))
+        if lo <= value <= hi:
+            return i
+    return None
+
+
+def segment_pace_s_per_km(prev: TrackPoint, cur: TrackPoint, dt: float) -> float:
+    return dt / ((cur.distance_m - prev.distance_m) / 1000)  # type: ignore[operator]
+
+
+def is_moving_segment(prev: TrackPoint, cur: TrackPoint) -> bool:
+    return (
+        prev.distance_m is not None
+        and cur.distance_m is not None
+        and cur.distance_m > prev.distance_m
+    )
+
+
+def moving_segments(points: list[TrackPoint]):
+    """Yield moving segments once so HR and pace zone totals share identical denominator."""
+    last_heart_rate = None
+    for prev, cur in zip(points, points[1:]):
+        if prev.heart_rate_bpm is not None:
+            last_heart_rate = prev.heart_rate_bpm
+        if prev.elapsed_time_s is None or cur.elapsed_time_s is None:
+            continue
+        dt = cur.elapsed_time_s - prev.elapsed_time_s
+        if dt <= 0 or not is_moving_segment(prev, cur):
+            continue
+        yield prev, cur, dt, last_heart_rate
+
+
+def zone_totals_template(zone_count: int, fallback_key: str | None = None) -> dict[str, float]:
+    totals = {f"zone_{i}": 0.0 for i in range(zone_count)}
+    if fallback_key:
+        totals[fallback_key] = 0.0
+    return totals
+
+
+def add_zone_duration(group: dict, zones: list[dict], value: float | None, fallback_key: str, dt: float) -> None:
+    zi = zone_index(value, zones)
+    group[f"zone_{zi}" if zi is not None else fallback_key] += dt / 60
 
 
 def _totals_rows(acts: list[Activity], bucket: str):
@@ -265,3 +321,32 @@ def distance_distribution(session: Session = Depends(get_session)):
                 out[i]["distance_m"] += d
                 break
     return out
+
+
+@router.get("/zone-distribution")
+def zone_distribution(
+    metric: str = Query("heart_rate", pattern="^(heart_rate|pace)$"),
+    bucket: str = Query("week", pattern="^(week|month|year)$"),
+    session: Session = Depends(get_session),
+):
+    zones = get_training_zones(session, metric)
+    fallback_key = "unknown" if metric == "heart_rate" else "outside"
+    base = zone_totals_template(len(zones), fallback_key)
+    groups = defaultdict(lambda: {"bucket": None, **base})
+    for activity in get_activities(session):
+        if not activity.id:
+            continue
+        points = session.exec(
+            select(TrackPoint)
+            .where(TrackPoint.activity_id == activity.id)
+            .order_by(TrackPoint.point_index)
+        ).all()
+        if len(points) < 2:
+            continue
+        k = bucket_key(activity.local_date, bucket)
+        group = groups[k]
+        group["bucket"] = k
+        for prev, cur, dt, carried_heart_rate in moving_segments(points):
+            value = carried_heart_rate if metric == "heart_rate" else segment_pace_s_per_km(prev, cur, dt)
+            add_zone_duration(group, zones, value, fallback_key, dt)
+    return [groups[k] for k in sorted(groups)]

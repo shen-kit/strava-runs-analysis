@@ -10,6 +10,8 @@ DEFAULT_DASHBOARD_SECTIONS = {
     "paceTrend": True,
     "elevationTrend": True,
     "distanceDistribution": True,
+    "heartRateZones": True,
+    "paceZones": True,
     "recentRuns": True,
 }
 

@@ -12,7 +12,7 @@ export type ImportJob = { id?: number; status: string; run_activities_seen: numb
 export type Summary = { total_runs: number; total_distance_m: number; total_moving_time_s: number; total_elevation_gain_m: number; average_pace_s_per_km?: number | null; longest_run_distance_m: number; latest_activity_date?: string | null; current_month_distance_m: number; current_year_distance_m: number };
 export type StatRow = Record<string, string | number | null>;
 export type TotalRow = { bucket: string; run_count: number; days_run?: number; distance_m: number; moving_time_s: number; elevation_gain_m: number; rolling_4_week_avg_distance_m?: number | null };
-export type DashboardSectionKey = "summary" | "weeklyVolume" | "trainingConsistency" | "personalBests" | "bestEffortTrend" | "longRun" | "paceTrend" | "elevationTrend" | "distanceDistribution" | "recentRuns";
+export type DashboardSectionKey = "summary" | "weeklyVolume" | "trainingConsistency" | "personalBests" | "bestEffortTrend" | "longRun" | "paceTrend" | "elevationTrend" | "distanceDistribution" | "heartRateZones" | "paceZones" | "recentRuns";
 export type AppSettings = {
   dashboard: { visibleSections: Record<DashboardSectionKey, boolean>; sectionOrder: DashboardSectionKey[]; defaultTimeRange: string; defaultBucket: "week" | "month" | "year" };
   maps: { defaultOverlay: "none" | RouteOverlayMetric; defaultMapType: "satellite" | "street" };
@@ -51,6 +51,7 @@ export const api = {
   bestEffortTrend: (distances = "1000,5000,10000") => request<StatRow[]>(`/stats/best-effort-trend?distances=${distances}`),
   longRunProgression: (bucket = "week") => request<StatRow[]>(`/stats/long-run-progression?bucket=${bucket}`),
   distanceDistribution: () => request<StatRow[]>("/stats/distance-distribution"),
+  zoneDistribution: (metric: "heart_rate" | "pace", bucket = "week") => request<StatRow[]>(`/stats/zone-distribution?metric=${metric}&bucket=${bucket}`),
   activities: (params = "limit=50") => request<Activity[]>(`/activities?${params}`),
   activity: (id: number) => request<Activity>(`/activities/${id}`),
   deleteActivity: (id: number) => request<{status: string; activity_id: number}>(`/activities/${id}`, { method: "DELETE" }),
