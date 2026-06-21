@@ -3,12 +3,14 @@ import type { ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/src/lib/api";
+import { useSettings } from "@/src/components/SettingsContext";
 import { formatDistance, formatDuration, formatElevation, formatPace, formatDate } from "@/src/lib/format";
 import { RouteMap } from "@/src/components/RouteMap";
 import { StreamLine } from "@/src/components/Charts";
 
 export default function ActivityDetailPage() {
   const id = Number(useParams().id);
+  const { settings } = useSettings();
   const activity = useQuery({ queryKey: ["activity", id], queryFn: () => api.activity(id), enabled: !!id });
   const route = useQuery({ queryKey: ["activity", id, "route"], queryFn: () => api.route(id), enabled: !!id });
   const splits = useQuery({ queryKey: ["activity", id, "splits"], queryFn: () => api.splits(id), enabled: !!id });
@@ -19,6 +21,8 @@ export default function ActivityDetailPage() {
   const streamRows = (name: string, valueKey: string, transform: (v: number) => number = (v) => v) => (streams.data?.streams?.[name] ?? []).map(([d, v]: [number, number | null]) => ({ km: d / 1000, [valueKey]: v == null ? null : transform(v) }));
   const elevationRows = streamRows("elevation", "elevation");
   const pauses = streams.data?.pauses ?? [];
+  const paceZoneBands = settings.trainingZones.pace.map((z) => ({ label: z.label, min: z.min / 60, max: z.max / 60 }));
+  const heartRateZoneBands = settings.trainingZones.heartRate.map((z) => ({ label: z.label, min: z.min, max: z.max }));
 
   return <main className="page-shell page-stack">
     {activity.isLoading ? <div className="status">Loading activity…</div> : activity.isError ? <div className="error-state">Activity failed to load.</div> : !a ? <div className="empty-state">Activity not found.</div> : <>
@@ -63,9 +67,9 @@ export default function ActivityDetailPage() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
-        <StreamCard title="Pace" subtitle="Pace stream with elevation context."><StreamLine data={streamRows("pace", "pace", (v) => v / 60)} yKey="pace" name="min/km" kind="pace" noData="No pace data" xDomainKm={xDomainKm} elevationData={elevationRows} pauses={pauses} /></StreamCard>
+        <StreamCard title="Pace" subtitle="Pace stream with elevation context."><StreamLine data={streamRows("pace", "pace", (v) => v / 60)} yKey="pace" name="min/km" kind="pace" noData="No pace data" xDomainKm={xDomainKm} elevationData={elevationRows} pauses={pauses} zoneBands={paceZoneBands} /></StreamCard>
         <StreamCard title="Elevation" subtitle="Elevation profile over distance."><StreamLine data={elevationRows} yKey="elevation" name="m" kind="elevation" noData="No elevation data" xDomainKm={xDomainKm} pauses={pauses} /></StreamCard>
-        <StreamCard title="Heart rate" subtitle="Heart rate stream with elevation context."><StreamLine data={streamRows("heart_rate", "heart_rate")} yKey="heart_rate" name="bpm" xDomainKm={xDomainKm} elevationData={elevationRows} pauses={pauses} /></StreamCard>
+        <StreamCard title="Heart rate" subtitle="Heart rate stream with elevation context."><StreamLine data={streamRows("heart_rate", "heart_rate")} yKey="heart_rate" name="bpm" xDomainKm={xDomainKm} elevationData={elevationRows} pauses={pauses} zoneBands={heartRateZoneBands} /></StreamCard>
         <StreamCard title="Cadence" subtitle="Cadence stream with elevation context."><StreamLine data={streamRows("cadence", "cadence")} yKey="cadence" name="spm" xDomainKm={xDomainKm} elevationData={elevationRows} pauses={pauses} /></StreamCard>
       </section>
     </>}

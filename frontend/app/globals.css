@@ -111,6 +111,9 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 .chart-placeholder { height: 100%; border-radius: var(--radius-control); background: var(--surface-muted); }
 .chart-wrap { height: clamp(16rem, 52vw, 20rem); min-width: 0; }
 .chart-wrap-sm { height: clamp(13rem, 45vw, 16rem); min-width: 0; }
+.zone-legend { display: flex; flex-wrap: wrap; gap: 0.45rem 0.75rem; margin-top: 0.65rem; color: var(--muted-strong); font-size: 0.78rem; }
+.zone-legend-item { display: inline-flex; align-items: center; gap: 0.35rem; }
+.zone-legend-swatch { width: 0.75rem; height: 0.75rem; border-radius: 0.2rem; opacity: 0.55; }
 
 .btn {
   display: inline-flex;
