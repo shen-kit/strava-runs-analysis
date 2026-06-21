@@ -6,10 +6,11 @@ This project is a work in progress. It is intended for personal/self-hosted use 
 
 ## Features
 
-- Import Strava bulk export ZIP files.
+- Import Strava bulk export ZIP files or individual activity files.
 - Import only run-like activities (`Run`, `TrailRun`, `VirtualRun`).
-- Safe repeat imports with deduplication by activity ID and file hash.
+- Safe repeat imports with deduplication by activity ID, fallback keys, and file hash.
 - Optional force reprocessing for all activities or selected file types (`GPX`, `FIT`, `TCX`, including `.gz` variants).
+- Configurable dashboard sections, default time range, map preferences, chart smoothing, training zones, and best-effort distances.
 - Dashboard with:
   - summary totals
   - weekly/monthly training volume
@@ -18,7 +19,10 @@ This project is a work in progress. It is intended for personal/self-hosted use 
   - best-effort trends
   - long-run progression
   - pace trends
+  - elevation trends
   - distance distribution
+  - heart-rate zone time by period
+  - pace zone time by period
   - recent runs
 - Activity detail pages with:
   - route map
@@ -28,6 +32,8 @@ This project is a work in progress. It is intended for personal/self-hosted use 
   - splits
   - best efforts
   - pace/elevation/HR/cadence charts
+  - translucent heart-rate and pace zone bands with legends
+  - pause highlighting on stream charts
   - source vs computed distance debugging
 - Local SQLite database stored under `./data/app.db`.
 
@@ -102,8 +108,8 @@ Notes:
     - There will be an option to export all of your data
     - Download the ZIP file once you receive it in your email
 2. Open http://localhost:3000/import.
-3. Upload the ZIP.
-4. Watch import progress.
+3. Upload the ZIP, or upload individual `.gpx`, `.tcx`, `.fit`, or `.gz` activity files.
+4. Watch import progress and diagnostics.
 5. Go to the dashboard or activities page after completion.
 
 Import behavior:
@@ -115,7 +121,7 @@ Import behavior:
 - Individual activity failures do not fail the whole import.
 - Uploaded ZIP/extracted files are deleted after the import job finishes.
 
-If you change parser logic or want to refresh stored derived data, use the import page’s force reprocess options.
+If you change parser logic or want to refresh stored derived data, use the import page’s force reprocess options. You can also reprocess a single activity from its action menu or delete activities from the activities UI.
 
 ## Data storage
 
@@ -215,25 +221,50 @@ NEXT_PUBLIC_MAP_ATTRIBUTION='© Mapbox © OpenStreetMap'
 
 Core endpoints include:
 
+Imports:
+
 - `POST /imports/strava-zip`
+- `POST /imports/activity-files`
+- `GET /imports?limit=10`
 - `GET /imports/{id}`
-- `GET /activities`
+
+Activities:
+
+- `GET /activities?limit=50`
+- `DELETE /activities`
 - `GET /activities/{id}`
+- `DELETE /activities/{id}`
+- `POST /activities/{id}/reprocess`
 - `GET /activities/{id}/route`
 - `GET /activities/{id}/route-overlay?metric=pace|heart_rate|gradient|cadence`
 - `GET /activities/{id}/splits`
 - `GET /activities/{id}/best-efforts`
-- `GET /activities/{id}/streams`
+- `GET /activities/{id}/streams?types=pace,heart_rate,cadence,elevation`
+- `GET /activities/{id}/track-points`
+
+Stats:
+
 - `GET /stats/summary`
 - `GET /stats/totals?bucket=week|month|year`
 - `GET /stats/weekly-volume`
 - `GET /stats/consistency`
+- `GET /stats/pace-trend?bucket=week|month|year`
+- `GET /stats/elevation?bucket=week|month|year`
 - `GET /stats/personal-bests`
-- `GET /stats/best-effort-trend`
-- `GET /stats/long-run-progression`
+- `GET /stats/best-effort-trend?distances=1000,5000,10000`
+- `GET /stats/long-run-progression?bucket=week|month|year`
 - `GET /stats/distance-distribution`
+- `GET /stats/zone-distribution?metric=heart_rate|pace&bucket=week|month|year`
 
-API responses use numeric base metric units, for example metres, seconds, seconds/km, bpm, spm.
+Settings:
+
+- `GET /settings`
+- `PUT /settings`
+- `GET /settings/best-effort-distances`
+- `PUT /settings/best-effort-distances`
+- `POST /settings/best-effort-distances/recalculate`
+
+API responses use numeric base metric units, for example metres, seconds, seconds/km, bpm, and spm. Zone distribution responses return minutes per bucket. Heart-rate zone distribution includes an `unknown` segment for moving time without HR data; pace zone distribution includes an `outside` segment for moving time outside configured pace zones. Both distributions use the same moving-segment denominator so totals match by period.
 
 ### Tests
 
@@ -258,5 +289,6 @@ Frontend tests are not currently implemented. Manual testing plus `npm run lint`
 - No multi-user support.
 - No app-specific backup/export.
 - FIT files can vary widely by device; parsing is best-effort.
+- Zone charts depend on imported stream/track-point data.
 - The map requires a valid external tile provider.
 - Styling and analytics are still evolving.
