@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from app.db import engine, init_db
 from app.main import app
-from app.models import Activity, TrackPoint
+from app.models import Activity, AppSetting, TrackPoint
 from app.importer.parsers import (
     FitTrackPointsParser,
     ParsedTrackPoint,
@@ -142,6 +142,54 @@ def test_smoothed_pace_stable_synthetic_run():
     assert pace
     assert all(295 <= v <= 305 for v in pace)
     assert 0 not in pace
+
+
+def test_stream_smoothing_uses_chart_settings():
+    t = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    with Session(engine) as s:
+        s.add(
+            AppSetting(
+                key="global",
+                value_json={
+                    "charts": {
+                        "paceSmoothingWindowM": 200,
+                        "elevationSmoothingWindowM": 1,
+                        "gradientSmoothingWindowM": 20,
+                    }
+                },
+            )
+        )
+        s.commit()
+    aid = insert_activity(
+        [
+            {
+                "timestamp": t + timedelta(seconds=i * 30),
+                "elapsed_time_s": i * 30,
+                "distance_m": i * 50,
+                "elevation_m": 100 if i == 1 else 0,
+            }
+            for i in range(9)
+        ]
+    )
+    res = TestClient(app).get(f"/activities/{aid}/streams?types=pace,elevation").json()
+    assert [50.0, 100.0] in res["streams"]["elevation"]
+    assert any(v is not None for _, v in res["streams"]["pace"])
+
+    gradient_aid = insert_activity(
+        [
+            {
+                "timestamp": t + timedelta(seconds=i * 30),
+                "elapsed_time_s": i * 30,
+                "distance_m": i * 50,
+                "lat": -37.0,
+                "lon": 145.0 + i * 0.001,
+                "elevation_m": [0, 100, 0][i],
+            }
+            for i in range(3)
+        ]
+    )
+    overlay = TestClient(app).get(f"/activities/{gradient_aid}/route-overlay?metric=gradient").json()
+    assert overlay["max_value"] > 150
 
 
 def test_elevation_smoothing_preserves_real_values_ignores_missing():

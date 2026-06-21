@@ -221,14 +221,18 @@ def add_boundaries(stream: Stream, full_distance_m: float) -> Stream:
 
 
 def build_streams(
-    rows: Iterable, wanted: set[str], full_distance_m: float
+    rows: Iterable,
+    wanted: set[str],
+    full_distance_m: float,
+    pace_window_m: float = 50.0,
+    elevation_window_m: float = 50.0,
 ) -> dict[str, Stream]:
     points = with_cumulative_distance(rows)
     streams: dict[str, Stream] = {}
     if "pace" in wanted:
-        streams["pace"] = smoothed_pace_stream(points)
+        streams["pace"] = smoothed_pace_stream(points, pace_window_m)
     if "elevation" in wanted:
-        streams["elevation"] = smoothed_elevation_stream(points)
+        streams["elevation"] = smoothed_elevation_stream(points, elevation_window_m)
     if "heart_rate" in wanted:
         streams["heart_rate"] = sensor_stream(points, "heart_rate_bpm")
     if "cadence" in wanted:

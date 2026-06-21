@@ -8,6 +8,7 @@ from ..models import (
     Activity,
     ActivityRoute,
     ActivitySplit,
+    AppSetting,
     BestEffort,
     ImportJob,
     TrackPoint,
@@ -21,6 +22,7 @@ from ..importer.derive import (
     simplify_route,
 )
 from ..importer.parsers import ParsedTrackPoint
+from .settings import SETTINGS_KEY, settings_with_defaults
 from .stream_utils import build_streams, downsample_streams, with_cumulative_distance
 
 router = APIRouter(prefix="/activities", tags=["activities"])
@@ -164,6 +166,24 @@ def _elevation_gain_m(cleaned) -> float | None:
         found = True
         gain += max(0.0, b.elevation_m - a.elevation_m)
     return gain if found else None
+
+
+def _chart_window(settings: dict, key: str, default: float) -> float:
+    try:
+        value = float(settings.get("charts", {}).get(key, default))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+def _chart_windows(session: Session) -> dict[str, float]:
+    row = session.get(AppSetting, SETTINGS_KEY)
+    settings = settings_with_defaults(row.value_json if row else None)
+    return {
+        "pace": _chart_window(settings, "paceSmoothingWindowM", 500.0),
+        "elevation": _chart_window(settings, "elevationSmoothingWindowM", 100.0),
+        "gradient": _chart_window(settings, "gradientSmoothingWindowM", 100.0),
+    }
 
 
 @router.delete("/{activity_id}")
@@ -313,7 +333,14 @@ def get_streams(
         or activity.computed_distance_m
         or max([p.distance_m or 0 for p in rows], default=0)
     )
-    streams = build_streams(rows, wanted, full_distance_m)
+    windows = _chart_windows(session)
+    streams = build_streams(
+        rows,
+        wanted,
+        full_distance_m,
+        pace_window_m=windows["pace"],
+        elevation_window_m=windows["elevation"],
+    )
     points = with_cumulative_distance(rows)
     pauses = [
         {
@@ -410,7 +437,14 @@ def get_route_overlay(
         "cadence": "cadence",
         "gradient": "elevation",
     }
-    streams = build_streams(rows, {stream_types[metric]}, full_distance_m)
+    windows = _chart_windows(session)
+    streams = build_streams(
+        rows,
+        {stream_types[metric]},
+        full_distance_m,
+        pace_window_m=windows["pace"],
+        elevation_window_m=windows["elevation"],
+    )
     stream = streams.get(stream_types[metric], [])
     features = []
     for a, b in zip(gps, gps[1:]):
@@ -418,9 +452,12 @@ def get_route_overlay(
             continue
         mid = (a.distance_m + b.distance_m) / 2
         if metric == "gradient":
-            e1 = _interp_stream(stream, max(0, mid - 50))
-            e2 = _interp_stream(stream, min(full_distance_m, mid + 50))
-            span = min(full_distance_m, mid + 50) - max(0, mid - 50)
+            half_window = windows["gradient"] / 2
+            start = max(0, mid - half_window)
+            end = min(full_distance_m, mid + half_window)
+            e1 = _interp_stream(stream, start)
+            e2 = _interp_stream(stream, end)
+            span = end - start
             value = (
                 ((e2 - e1) / span * 100)
                 if e1 is not None and e2 is not None and span > 0
